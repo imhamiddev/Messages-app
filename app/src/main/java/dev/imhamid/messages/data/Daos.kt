@@ -67,6 +67,9 @@ interface MessageDao {
     @Query("UPDATE messages SET type = :type WHERE id = :id")
     suspend fun setType(id: Long, type: Int)
 
+    @Query("UPDATE messages SET type = :type WHERE id = :id AND type = 4")
+    suspend fun setTypeIfSending(id: Long, type: Int)
+
     @Query("UPDATE messages SET blocked = :blocked WHERE threadKey = :key")
     suspend fun setBlocked(key: String, blocked: Boolean)
 }
