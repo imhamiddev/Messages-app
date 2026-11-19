@@ -118,4 +118,6 @@
     <string name="onboarding_skip">Not now</string>
     <string name="action_select_text">Select text</string>
     <string name="settings_gradient">Bubble color</string>
+    <string name="notif_reply">Reply</string>
+    <string name="notif_delete">Delete</string>
 </resources>

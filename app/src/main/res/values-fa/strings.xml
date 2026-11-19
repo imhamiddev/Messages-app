@@ -118,4 +118,6 @@
     <string name="onboarding_skip">فعلاً نه</string>
     <string name="action_select_text">انتخاب متن</string>
     <string name="settings_gradient">رنگ حباب‌ها</string>
+    <string name="notif_reply">پاسخ</string>
+    <string name="notif_delete">حذف</string>
 </resources>
