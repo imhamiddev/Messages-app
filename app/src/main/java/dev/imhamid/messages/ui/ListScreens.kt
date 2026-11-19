@@ -1,5 +1,6 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -162,7 +163,9 @@ fun BlockedScreen(vm: MainViewModel, onBack: () -> Unit) {
                                     )
                                 }
                             }
-                            TextButton(onClick = { vm.unblock(b.threadKey) }) { Text(stringResource(R.string.action_unblock)) }
+                            IconButton(onClick = { vm.unblock(b.threadKey) }) {
+                                Icon(Icons.Default.LockOpen, stringResource(R.string.action_unblock))
+                            }
                         }
                     }
                 }

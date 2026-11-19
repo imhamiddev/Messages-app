@@ -1,5 +1,7 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.OutlinedIconButton
 import android.Manifest
 import android.app.role.RoleManager
 import android.content.Context
@@ -143,8 +145,8 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { phoneLauncher.launch(Manifest.permission.READ_PHONE_STATE) }) {
-                        Text(stringResource(R.string.action_allow))
+                    OutlinedIconButton(onClick = { phoneLauncher.launch(Manifest.permission.READ_PHONE_STATE) }) {
+                        Icon(Icons.Default.Check, stringResource(R.string.action_allow))
                     }
                 } else {
                     SimOption(stringResource(R.string.sim_system_default), defaultSim < 0) { vm.settings.setDefaultSim(-1) }
@@ -175,8 +177,8 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { vm.runImport() }, enabled = !importing) {
-                        Text(stringResource(R.string.import_now))
+                    OutlinedIconButton(onClick = { vm.runImport() }, enabled = !importing) {
+                        Icon(Icons.Default.Download, stringResource(R.string.import_now))
                     }
                     if (importing) {
                         Text(stringResource(R.string.importing, imported), style = MaterialTheme.typography.bodyMedium)
