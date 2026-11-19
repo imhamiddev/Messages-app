@@ -34,6 +34,16 @@ class SettingsStore(ctx: Context) {
 
     fun setBubble(i: Int) { _bubble.value = i; sp.edit().putInt("bubble", i).apply() }
 
+    /** Index into FontScales (0..3). */
+    private val _fontScale = MutableStateFlow(sp.getInt("font_scale", 1))
+    val fontScale: StateFlow<Int> = _fontScale
+    fun setFontScale(i: Int) { _fontScale.value = i; sp.edit().putInt("font_scale", i).apply() }
+
+    /** Use the system (Material You) colours instead of the bubble-derived accent. */
+    private val _dynamic = MutableStateFlow(sp.getBoolean("dynamic", false))
+    val dynamic: StateFlow<Boolean> = _dynamic
+    fun setDynamic(v: Boolean) { _dynamic.value = v; sp.edit().putBoolean("dynamic", v).apply() }
+
     /** True once the user has answered the "make default SMS app" prompt (accepted or skipped). */
     var defaultPromptDismissed: Boolean
         get() = sp.getBoolean("default_prompt_dismissed", false)

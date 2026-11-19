@@ -31,6 +31,12 @@ interface MessageDao {
     )
     fun observeUnread(): Flow<List<UnreadCount>>
 
+    @Query(
+        "SELECT * FROM messages WHERE deletedAt IS NULL AND blocked = 0 " +
+            "AND body LIKE '%' || :q || '%' ESCAPE '\\' ORDER BY date DESC, id DESC LIMIT 300"
+    )
+    suspend fun search(q: String): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE threadKey = :key AND deletedAt IS NULL ORDER BY date DESC, id DESC")
     fun observeThread(key: String): Flow<List<MessageEntity>>
 

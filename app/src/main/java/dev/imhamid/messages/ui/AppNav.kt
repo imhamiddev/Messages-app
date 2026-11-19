@@ -38,6 +38,7 @@ object Routes {
     const val TRASH = "trash"
     const val BLOCKED = "blocked"
     const val SCHEDULED = "scheduled"
+    const val SEARCH = "search"
 
     /** Addresses can contain any character, so they travel through the route hex-encoded. */
     fun chat(address: String): String =
@@ -118,7 +119,8 @@ private fun AppNavHost(vm: MainViewModel, launchAddress: String?, onLaunchConsum
                 onSettings = { nav.navigate(Routes.SETTINGS) },
                 onTrash = { nav.navigate(Routes.TRASH) },
                 onBlocked = { nav.navigate(Routes.BLOCKED) },
-                onScheduled = { nav.navigate(Routes.SCHEDULED) }
+                onScheduled = { nav.navigate(Routes.SCHEDULED) },
+                onSearch = { nav.navigate(Routes.SEARCH) }
             )
         }
         composable(Routes.CHAT, arguments = listOf(navArgument("addr") { type = NavType.StringType })) { e ->
@@ -138,5 +140,8 @@ private fun AppNavHost(vm: MainViewModel, launchAddress: String?, onLaunchConsum
         composable(Routes.TRASH) { TrashScreen(vm) { nav.popBackStack() } }
         composable(Routes.BLOCKED) { BlockedScreen(vm) { nav.popBackStack() } }
         composable(Routes.SCHEDULED) { ScheduledScreen(vm) { nav.popBackStack() } }
+        composable(Routes.SEARCH) {
+            SearchScreen(vm, onBack = { nav.popBackStack() }, onOpen = { nav.navigate(Routes.chat(it)) })
+        }
     }
 }

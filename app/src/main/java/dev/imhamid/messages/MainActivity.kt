@@ -27,6 +27,8 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val theme by app.settings.theme.collectAsStateWithLifecycle()
             val bubble by app.settings.bubble.collectAsStateWithLifecycle()
+            val dynamic by app.settings.dynamic.collectAsStateWithLifecycle()
+            val fontIdx by app.settings.fontScale.collectAsStateWithLifecycle()
             val dark = when (theme) {
                 1 -> false
                 2 -> true
@@ -41,7 +43,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 onDispose { }
             }
-            MessagesTheme(dark, bubble) {
+            MessagesTheme(dark, bubble, dynamic, fontIdx) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     AppRoot(launchAddress = launchAddress, onLaunchConsumed = { launchAddress = null })
                 }

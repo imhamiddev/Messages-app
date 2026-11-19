@@ -175,6 +175,12 @@ class Repository(
         messages.markRead(key)
     }
 
+    /** Substring search over all (non-trashed, non-blocked) messages; case-insensitive for Latin text. */
+    suspend fun search(q: String): List<MessageEntity> = withContext(Dispatchers.IO) {
+        val esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        messages.search(esc)
+    }
+
     // ---------- trash ----------
 
     suspend fun trashMessages(ids: List<Long>) = withContext(Dispatchers.IO) {

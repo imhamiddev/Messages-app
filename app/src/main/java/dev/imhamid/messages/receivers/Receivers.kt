@@ -90,6 +90,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val key = intent.getStringExtra(Notifier.EXTRA_KEY) ?: return
         val address = intent.getStringExtra(Notifier.EXTRA_ADDRESS) ?: return
         when (intent.action) {
+            Notifier.ACTION_COPY -> {
+                val code = intent.getStringExtra(Notifier.EXTRA_CODE) ?: return
+                val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("code", code))
+                android.widget.Toast.makeText(context, context.getString(dev.imhamid.messages.R.string.code_copied), android.widget.Toast.LENGTH_SHORT).show()
+                Notifier.cancel(context, key)
+            }
             Notifier.ACTION_REPLY -> {
                 val text = RemoteInput.getResultsFromIntent(intent)
                     ?.getCharSequence(Notifier.KEY_REPLY)?.toString()?.trim().orEmpty()

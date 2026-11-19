@@ -1,5 +1,7 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -297,4 +299,18 @@ fun Swatch(selected: Boolean, brush: Brush?, onClick: () -> Unit) {
             )
         }
     }
+}
+
+/** Frosted-glass surface: translucent tint, soft highlight and a thin light border. */
+@Composable
+fun Modifier.glass(shape: Shape): Modifier {
+    val tint = MaterialTheme.colorScheme.surface
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val sheen = if (dark) 0.10f else 0.35f
+    val rim = if (dark) 0.16f else 0.7f
+    return this
+        .clip(shape)
+        .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.78f), tint.copy(alpha = 0.58f))))
+        .background(Brush.linearGradient(listOf(Color.White.copy(alpha = sheen), Color.Transparent)))
+        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = rim), Color.White.copy(alpha = 0.06f))), shape)
 }
