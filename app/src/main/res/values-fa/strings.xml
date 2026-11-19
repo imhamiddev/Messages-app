@@ -117,7 +117,5 @@
     <string name="onboarding_default_action">پیش‌فرض کن</string>
     <string name="onboarding_skip">فعلاً نه</string>
     <string name="action_select_text">انتخاب متن</string>
-    <string name="settings_accent">رنگ اصلی</string>
-    <string name="settings_gradient">گرادینت حباب‌ها</string>
-    <string name="settings_wallpaper">پس‌زمینه‌ی چت</string>
+    <string name="settings_gradient">رنگ حباب‌ها</string>
 </resources>

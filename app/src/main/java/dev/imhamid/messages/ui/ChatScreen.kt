@@ -147,7 +147,6 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Scaffold(
-            modifier = Modifier.wallpaper(),
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
             topBar = {

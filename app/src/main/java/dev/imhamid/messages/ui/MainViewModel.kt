@@ -43,9 +43,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val calendar = settings.calendar
     val theme = settings.theme
     val defaultSim = settings.defaultSim
-    val accent = settings.accent
-    val gradient = settings.gradient
-    val wallpaper = settings.wallpaper
+    val bubble = settings.bubble
 
     /** null until the first database result arrives, so the UI doesn't flash an empty state. */
     val threads: StateFlow<List<ThreadItem>?> = combine(
