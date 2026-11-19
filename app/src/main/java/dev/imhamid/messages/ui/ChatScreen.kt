@@ -1,5 +1,27 @@
 package dev.imhamid.messages.ui
 
+import dev.imhamid.messages.util.LinkKind
+import dev.imhamid.messages.util.LinkToken
+import dev.imhamid.messages.util.Smart
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.provider.ContactsContract
+import android.net.Uri
+import android.content.Intent
+import android.content.Context
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -136,7 +158,23 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
     var deleteTarget by remember { mutableStateOf<MessageEntity?>(null) }
     var selectingId by remember { mutableStateOf<Long?>(null) }
     var showSchedule by remember { mutableStateOf(false) }
+    var contactChoice by remember { mutableStateOf<Pair<String, List<String>>?>(null) }
     val listState = rememberLazyListState()
+
+    fun appendContact(name: String, number: String) {
+        text = (if (text.isBlank()) "" else text.trimEnd() + "\n") + name + "\n" + number
+    }
+    val pickContact = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) {
+            val c = readContact(ctx, uri)
+            when {
+                c == null || c.second.isEmpty() ->
+                    Toast.makeText(ctx, ctx.getString(R.string.contact_no_number), Toast.LENGTH_SHORT).show()
+                c.second.size == 1 -> appendContact(c.first, c.second[0])
+                else -> contactChoice = c
+            }
+        }
+    }
 
     val effectiveSub = pref?.simSubId ?: defaultSim
     val isBlocked = key in blockedKeys
@@ -158,7 +196,9 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
             topBar = {
+              Box(Modifier.statusBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp).glass(RoundedCornerShape(26.dp))) {
                 TopAppBar(
+                    windowInsets = WindowInsets(0, 0, 0, 0),
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
@@ -208,12 +248,22 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
+              }
             }
         ) { pad ->
-            Column(Modifier.fillMaxSize().padding(pad)) {
-                LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, reverseLayout = true) {
+            Column(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
+                LazyColumn(
+                    Modifier.weight(1f).fillMaxWidth(), state = listState, reverseLayout = true,
+                    contentPadding = PaddingValues(top = pad.calculateTopPadding() + 4.dp, bottom = 4.dp)
+                ) {
                     itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
                         val older = messages.getOrNull(i + 1)
+                        val newer = messages.getOrNull(i - 1)
+                        val gap = 5 * 60 * 1000L
+                        val groupedOlder = older != null && older.incoming == m.incoming &&
+                            DateFmt.isSameDay(older.date, m.date) && m.date - older.date < gap
+                        val groupedNewer = newer != null && newer.incoming == m.incoming &&
+                            DateFmt.isSameDay(newer.date, m.date) && newer.date - m.date < gap
                         Column(Modifier.animateItem()) {
                             if (older == null || !DateFmt.isSameDay(older.date, m.date)) {
                                 DayHeader(
@@ -227,6 +277,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                                 m = m, fa = fa,
                                 animateIn = m.date >= openedAt && m.id !in played,
                                 onPlayed = { played.add(m.id) },
+                                groupedOlder = groupedOlder, groupedNewer = groupedNewer,
                                 selecting = selectingId == m.id,
                                 onSelectDone = { if (selectingId == m.id) selectingId = null },
                                 onCopy = {
@@ -248,6 +299,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                     chatSimSet = pref?.simSubId != null,
                     onPickSim = { vm.setChatSim(key, it) },
                     onSchedule = { showSchedule = true },
+                    onAttach = { pickContact.launch(null) },
                     onSend = {
                         vm.send(address, text.trim(), effectiveSub)
                         text = ""
@@ -255,6 +307,26 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                 )
             }
         }
+    }
+
+    contactChoice?.let { (cname, numbers) ->
+        AlertDialog(
+            onDismissRequest = { contactChoice = null },
+            confirmButton = {},
+            title = { Text(stringResource(R.string.contact_pick_title)) },
+            text = {
+                Column {
+                    numbers.forEach { n ->
+                        Text(
+                            n,
+                            Modifier.fillMaxWidth().clickable { appendContact(cname, n); contactChoice = null }
+                                .padding(vertical = 12.dp),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        )
     }
 
     if (showSchedule) {
@@ -302,7 +374,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
 @Composable
 private fun DayHeader(label: String) {
     Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
-        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Surface(shape = CircleShape, color = Color.Transparent, modifier = Modifier.glass(CircleShape)) {
             Text(
                 label, Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -313,12 +385,17 @@ private fun DayHeader(label: String) {
 
 /** Read-only text field that starts with the whole message selected, so the system toolbar offers Copy. */
 @Composable
-private fun SelectableBody(text: String, color: Color, initial: TextRange?, onDone: () -> Unit) {
+private fun SelectableBody(text: String, color: Color, out: Boolean, initial: TextRange?, onDone: () -> Unit) {
     val focus = remember { FocusRequester() }
     var value by remember { mutableStateOf(TextFieldValue(text, initial ?: TextRange(0, text.length))) }
     var hadFocus by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { focus.requestFocus() }
     BackHandler { onDone() }
+    val primary = MaterialTheme.colorScheme.primary
+    // Outgoing bubbles are coloured, so the highlight is a dark veil; incoming ones get an accent veil.
+    val selColors = if (out) TextSelectionColors(handleColor = Color.White, backgroundColor = Color.Black.copy(alpha = 0.40f))
+    else TextSelectionColors(handleColor = primary, backgroundColor = primary.copy(alpha = 0.38f))
+    CompositionLocalProvider(LocalTextSelectionColors provides selColors) {
     BasicTextField(
         value = value,
         onValueChange = { value = it },
@@ -329,26 +406,86 @@ private fun SelectableBody(text: String, color: Color, initial: TextRange?, onDo
             if (it.isFocused) hadFocus = true else if (hadFocus) onDone()
         }
     )
+    }
 }
 
 private val digitRun = Regex("[0-9\\u0660-\\u0669\\u06F0-\\u06F9]+")
 
-/** The run of digits (Latin, Arabic-Indic or Persian) under a touch point in the bubble text, or null. */
-private fun numberAt(
+/** Caret offset in the bubble text under a touch point, or null when the touch is outside the text. */
+private fun offsetAt(
     pos: Offset,
     box: LayoutCoordinates?,
     textCoords: LayoutCoordinates?,
     layout: TextLayoutResult?,
-    body: String
-): TextRange? {
+    length: Int
+): Int? {
     if (box == null || textCoords == null || layout == null || !box.isAttached || !textCoords.isAttached) return null
     val local = textCoords.localPositionOf(box, pos)
     if (local.x < -16f || local.y < -8f || local.x > layout.size.width + 16f || local.y > layout.size.height + 8f) return null
-    val off = layout.getOffsetForPosition(local).coerceIn(0, body.length)
+    return layout.getOffsetForPosition(local).coerceIn(0, length)
+}
+
+/** The run of digits (Latin, Arabic-Indic or Persian) under a touch point, or null. */
+private fun numberAt(
+    pos: Offset, box: LayoutCoordinates?, textCoords: LayoutCoordinates?, layout: TextLayoutResult?, body: String
+): TextRange? {
+    val off = offsetAt(pos, box, textCoords, layout, body.length) ?: return null
     for (m in digitRun.findAll(body)) {
         if (off >= m.range.first && off <= m.range.last + 1) return TextRange(m.range.first, m.range.last + 1)
     }
     return null
+}
+
+private fun tokenAt(
+    pos: Offset, box: LayoutCoordinates?, textCoords: LayoutCoordinates?, layout: TextLayoutResult?,
+    body: String, tokens: List<LinkToken>
+): LinkToken? {
+    if (tokens.isEmpty()) return null
+    val off = offsetAt(pos, box, textCoords, layout, body.length) ?: return null
+    return tokens.firstOrNull { off >= it.start && off <= it.end }
+}
+
+private fun openToken(ctx: Context, t: LinkToken) {
+    val intent = if (t.kind == LinkKind.URL) {
+        val u = if (t.value.contains("://")) t.value else "https://" + t.value
+        Intent(Intent.ACTION_VIEW, Uri.parse(u))
+    } else {
+        Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(t.value)))
+    }
+    try {
+        ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: Exception) {
+    }
+}
+
+/** Name and phone numbers of a contact picked with the system picker. */
+private fun readContact(ctx: Context, uri: Uri): Pair<String, List<String>>? {
+    var id: String? = null
+    var name = ""
+    ctx.contentResolver.query(
+        uri, arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME), null, null, null
+    )?.use { c ->
+        if (c.moveToFirst()) {
+            id = c.getString(0)
+            name = c.getString(1).orEmpty()
+        }
+    }
+    val cid = id ?: return null
+    val numbers = LinkedHashMap<String, String>()
+    try {
+        ctx.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?", arrayOf(cid), null
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val n = c.getString(0).orEmpty().trim()
+                if (n.isNotEmpty()) numbers.putIfAbsent(PhoneUtils.clean(n).ifEmpty { n }, n)
+            }
+        }
+    } catch (_: SecurityException) {
+    }
+    return name to numbers.values.toList()
 }
 
 @Composable
@@ -357,6 +494,8 @@ private fun Bubble(
     fa: Boolean,
     animateIn: Boolean,
     onPlayed: () -> Unit,
+    groupedOlder: Boolean,
+    groupedNewer: Boolean,
     selecting: Boolean,
     onSelectDone: () -> Unit,
     onCopy: () -> Unit,
@@ -366,9 +505,12 @@ private fun Bubble(
 ) {
     val out = !m.incoming
     val grad = LocalGradient.current
+    val ctx = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val src = remember { MutableInteractionSource() }
     val haptics = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
+    var linkTarget by remember { mutableStateOf<LinkToken?>(null) }
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var boxCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -380,7 +522,11 @@ private fun Bubble(
             onPlayed()
         }
     }
-    val shape = if (out) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp) else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
+    // Consecutive messages from the same side (within 5 minutes) form a visual group.
+    val big = 18.dp
+    val sideTop = if (groupedOlder) 5.dp else big
+    val sideBottom = if (groupedNewer) 5.dp else 4.dp
+    val shape = if (out) RoundedCornerShape(big, sideTop, sideBottom, big) else RoundedCornerShape(sideTop, big, big, sideBottom)
     val useGradient = out && grad != null
     val container = when {
         useGradient -> Color.Transparent
@@ -394,15 +540,27 @@ private fun Bubble(
     }
     val bgMod = if (useGradient) Modifier.background(Brush.linearGradient(grad!!), shape) else Modifier
 
+    val tokens = remember(m.body) { Smart.tokens(m.body) }
+    val linkColor = if (out) content else MaterialTheme.colorScheme.primary
+    val annotated = remember(m.body, linkColor) {
+        buildAnnotatedString {
+            append(m.body)
+            tokens.forEach { addStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline), it.start, it.end) }
+        }
+    }
+    val code = remember(m.body, out) { if (out) null else Smart.verificationCode(m.body) }
+
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp).graphicsLayer {
-            alpha = appear.value.coerceIn(0f, 1f)
-            val s = 0.85f + 0.15f * appear.value
-            scaleX = s
-            scaleY = s
-            translationY = (1f - appear.value) * 48f
-            transformOrigin = TransformOrigin(if (out) 1f else 0f, 1f)
-        },
+        Modifier.fillMaxWidth()
+            .padding(start = 12.dp, end = 12.dp, top = if (groupedOlder) 1.dp else 6.dp, bottom = 1.dp)
+            .graphicsLayer {
+                alpha = appear.value.coerceIn(0f, 1f)
+                val sc = 0.85f + 0.15f * appear.value
+                scaleX = sc
+                scaleY = sc
+                translationY = (1f - appear.value) * 48f
+                transformOrigin = TransformOrigin(if (out) 1f else 0f, 1f)
+            },
         horizontalArrangement = if (out) Arrangement.End else Arrangement.Start
     ) {
         Box {
@@ -421,7 +579,10 @@ private fun Bubble(
                                     val released = tryAwaitRelease()
                                     src.emit(if (released) PressInteraction.Release(press) else PressInteraction.Cancel(press))
                                 },
-                                onTap = { menu = true },
+                                onTap = { pos ->
+                                    val t = tokenAt(pos, boxCoords, textCoords, textLayout, m.body, tokens)
+                                    if (t != null) linkTarget = t else menu = true
+                                },
                                 onLongPress = { pos ->
                                     val r = numberAt(pos, boxCoords, textCoords, textLayout, m.body)
                                     if (r != null) {
@@ -437,13 +598,29 @@ private fun Bubble(
                     )
             ) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp).animateContentSize()) {
-                    if (selecting) SelectableBody(m.body, content, numberSel) { numberSel = null; onSelectDone() }
+                    if (selecting) SelectableBody(m.body, content, out, numberSel) { numberSel = null; onSelectDone() }
                     else Text(
-                        m.body,
+                        annotated,
                         modifier = Modifier.onGloballyPositioned { textCoords = it },
                         style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
                         onTextLayout = { textLayout = it }
                     )
+                    if (code != null && !selecting) {
+                        Row(
+                            Modifier.padding(top = 6.dp).clip(CircleShape)
+                                .background(content.copy(alpha = 0.14f))
+                                .clickable {
+                                    clipboard.setText(AnnotatedString(code))
+                                    Toast.makeText(ctx, ctx.getString(R.string.code_copied), Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.ContentCopy, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.copy_code, code), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                     Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                         if (m.type == TYPE_FAILED) {
                             Icon(Icons.Default.ErrorOutline, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.error)
@@ -467,6 +644,25 @@ private fun Bubble(
                             }
                         }
                     }
+                }
+            }
+            DropdownMenu(expanded = linkTarget != null, onDismissRequest = { linkTarget = null }) {
+                val t = linkTarget
+                if (t != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(if (t.kind == LinkKind.URL) R.string.link_open else R.string.link_call)) },
+                        leadingIcon = { Icon(if (t.kind == LinkKind.URL) Icons.Default.OpenInBrowser else Icons.Default.Call, null) },
+                        onClick = { linkTarget = null; openToken(ctx, t) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.link_copy)) },
+                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                        onClick = {
+                            linkTarget = null
+                            clipboard.setText(AnnotatedString(t.value))
+                            Toast.makeText(ctx, ctx.getString(R.string.copied), Toast.LENGTH_SHORT).show()
+                        }
+                    )
                 }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -506,6 +702,7 @@ private fun Composer(
     chatSimSet: Boolean,
     onPickSim: (Int?) -> Unit,
     onSchedule: () -> Unit,
+    onAttach: () -> Unit,
     onSend: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -527,29 +724,42 @@ private fun Composer(
     val fly = remember { Animatable(0f) }
     val sendSrc = remember { MutableInteractionSource() }
     val flyPx = with(density) { 44.dp.toPx() }
+    val focus = remember { FocusRequester() }
+    val pillSrc = remember { MutableInteractionSource() }
 
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
+        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            IconButton(onClick = onAttach) {
+                Icon(Icons.Default.PersonAdd, stringResource(R.string.attach_contact))
+            }
+        }
         Surface(
-            Modifier.weight(1f).animateContentSize(),
+            modifier = Modifier.weight(1f).animateContentSize().glass(RoundedCornerShape(26.dp)),
             shape = RoundedCornerShape(26.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
+            color = Color.Transparent
         ) {
-            Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.Bottom) {
+            Row(
+                Modifier.padding(horizontal = 6.dp)
+                    .clickable(interactionSource = pillSrc, indication = null) { focus.requestFocus() },
+                verticalAlignment = Alignment.Bottom
+            ) {
                 if (sims.size > 1) {
                     Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
                         SimChip(sims, effectiveSub, chatSimSet, onPickSim)
                     }
                 }
+                // The schedule icon sits right after the text (not pinned to the far edge), so there is no big gap.
                 Box(
-                    Modifier.weight(1f).heightIn(min = 52.dp).padding(horizontal = 8.dp, vertical = 14.dp),
+                    Modifier.weight(1f, fill = false).widthIn(min = 96.dp).heightIn(min = 52.dp)
+                        .padding(start = 8.dp, end = 2.dp, top = 14.dp, bottom = 14.dp),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     BasicTextField(
                         value = text, onValueChange = onText,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.focusRequester(focus),
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface,
                             textDirection = TextDirection.Content,
