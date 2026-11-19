@@ -1,5 +1,25 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.layout.onSizeChanged
 import dev.chrisbanes.haze.HazeState
@@ -281,7 +301,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                                 )
                             }
                             Bubble(
-                                m = m, fa = fa,
+                                m = m, fa = fa, sims = sims,
                                 animateIn = m.date >= openedAt && m.id !in played,
                                 onPlayed = { played.add(m.id) },
                                 groupedOlder = groupedOlder, groupedNewer = groupedNewer,
@@ -502,6 +522,7 @@ private fun readContact(ctx: Context, uri: Uri): Pair<String, List<String>>? {
 private fun Bubble(
     m: MessageEntity,
     fa: Boolean,
+    sims: List<SimInfo>,
     animateIn: Boolean,
     onPlayed: () -> Unit,
     groupedOlder: Boolean,
@@ -520,6 +541,8 @@ private fun Bubble(
     val src = remember { MutableInteractionSource() }
     val haptics = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
+    var showSim by remember { mutableStateOf(false) }
+    val simSlot = if (m.subId >= 0) sims.firstOrNull { it.subId == m.subId }?.slot ?: 0 else 0
     var linkTarget by remember { mutableStateOf<LinkToken?>(null) }
     var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var textCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -559,9 +582,21 @@ private fun Bubble(
 
     val tokens = remember(m.body) { Smart.tokens(m.body) }
     val linkColor = if (out) content else MaterialTheme.colorScheme.primary
-    val annotated = remember(m.body, linkColor) {
+    val emoji = remember(m.body) { Emoji.spans(ctx, m.body) }
+    val inline = remember(emoji) {
+        emoji.mapIndexed { i, sp ->
+            "e$i" to InlineTextContent(Placeholder(1.25.em, 1.25.em, PlaceholderVerticalAlign.TextCenter)) { EmojiImage(sp.file) }
+        }.toMap()
+    }
+    val annotated = remember(m.body, linkColor, emoji) {
         buildAnnotatedString {
-            append(m.body)
+            var pos = 0
+            emoji.forEachIndexed { i, sp ->
+                append(m.body.substring(pos, sp.start))
+                appendInlineContent("e$i", m.body.substring(sp.start, sp.end))
+                pos = sp.end
+            }
+            append(m.body.substring(pos))
             tokens.forEach { addStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline), it.start, it.end) }
         }
     }
@@ -575,11 +610,13 @@ private fun Bubble(
                 val sc = 0.85f + 0.15f * appear.value
                 scaleX = sc
                 scaleY = sc
-                translationY = (1f - appear.value) * 48f
+                translationY = (1f - appear.value) * 56f
+                translationX = (1f - appear.value) * (if (out) 40f else -40f)
                 transformOrigin = TransformOrigin(if (out) 1f else 0f, 1f)
             },
         horizontalArrangement = if (out) Arrangement.End else Arrangement.Start
     ) {
+        Column(horizontalAlignment = if (out) Alignment.End else Alignment.Start) {
         Box {
             Surface(
                 shape = shape,
@@ -598,7 +635,7 @@ private fun Bubble(
                                 },
                                 onTap = { pos ->
                                     val t = tokenAt(pos, boxCoords, textCoords, textLayout, m.body, tokens)
-                                    if (t != null) openToken(ctx, t) else menu = true
+                                    if (t != null) openToken(ctx, t) else if (simSlot > 0) showSim = !showSim
                                 },
                                 onLongPress = { pos ->
                                     val lt = tokenAt(pos, boxCoords, textCoords, textLayout, m.body, tokens)
@@ -622,6 +659,7 @@ private fun Bubble(
                     if (selecting) SelectableBody(m.body, content, out, numberSel) { numberSel = null; onSelectDone() }
                     else Text(
                         annotated,
+                        inlineContent = inline,
                         modifier = Modifier.onGloballyPositioned { textCoords = it },
                         style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
                         onTextLayout = { textLayout = it }
@@ -657,7 +695,13 @@ private fun Bubble(
                         )
                         if (out && m.type != TYPE_FAILED) {
                             Spacer(Modifier.width(4.dp))
-                            AnimatedContent(targetState = m.type == TYPE_SENDING, label = "status") { sending ->
+                            AnimatedContent(
+                                targetState = m.type == TYPE_SENDING, label = "status",
+                                transitionSpec = {
+                                    (scaleIn(spring(dampingRatio = 0.4f, stiffness = 500f), initialScale = 0.2f) + fadeIn(tween(120))) togetherWith
+                                        (scaleOut(tween(120), targetScale = 0.4f) + fadeOut(tween(100)))
+                                }
+                            ) { sending ->
                                 Icon(
                                     if (sending) Icons.Default.Schedule else Icons.Default.Check,
                                     null, Modifier.size(13.dp), tint = content.copy(alpha = 0.7f)
@@ -703,6 +747,27 @@ private fun Bubble(
                 )
             }
         }
+        AnimatedVisibility(
+            visible = showSim && simSlot > 0,
+            enter = fadeIn(tween(160)) + expandVertically(spring(dampingRatio = 0.7f)) + scaleIn(spring(dampingRatio = 0.5f), initialScale = 0.5f),
+            exit = fadeOut(tween(110)) + shrinkVertically(tween(140)) + scaleOut(tween(110), targetScale = 0.6f)
+        ) {
+            SimBadge(simSlot, fa)
+        }
+        }
+    }
+}
+
+/** Tiny SIM-card icon with the slot number inside. */
+@Composable
+private fun SimBadge(slot: Int, fa: Boolean) {
+    Box(Modifier.padding(top = 2.dp, start = 6.dp, end = 6.dp).size(18.dp), contentAlignment = Alignment.Center) {
+        Icon(Icons.Default.SimCard, null, Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            DateFmt.digits(slot.toString(), fa),
+            Modifier.padding(top = 2.dp),
+            fontSize = 8.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.background
+        )
     }
 }
 
@@ -807,30 +872,66 @@ private fun Composer(
             }
         }
         Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier.size(52.dp)
-                .graphicsLayer { scaleX = sendScale; scaleY = sendScale }
-                .pressScale(sendSrc)
-                .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(interactionSource = sendSrc, indication = null, enabled = canSend) {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    scope.launch {
-                        fly.animateTo(1f, tween(140))
-                        fly.snapTo(-1f)
-                        fly.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium))
+        val burst = remember { Animatable(0f) }
+        val squish = remember { Animatable(1f) }
+        val ringColor = MaterialTheme.colorScheme.primary
+        Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            // Expanding ring + sparks that burst out of the button when a message is sent.
+            Canvas(Modifier.requiredSize(140.dp)) {
+                val t = burst.value
+                if (t > 0f && t < 1f) {
+                    val c = Offset(size.width / 2, size.height / 2)
+                    val r0 = 26.dp.toPx()
+                    val r = r0 + (62.dp.toPx() - r0) * t
+                    drawCircle(
+                        ringColor.copy(alpha = (1f - t) * 0.55f), r, c,
+                        style = Stroke(width = (3.dp.toPx() * (1f - t)).coerceAtLeast(0.5f))
+                    )
+                    for (k in 0 until 8) {
+                        val ang = Math.toRadians(k * 45.0 + 22.0)
+                        val d = r0 + (50.dp.toPx() - r0) * t
+                        drawCircle(
+                            ringColor.copy(alpha = (1f - t) * 0.9f), 3.5.dp.toPx() * (1f - t),
+                            Offset(c.x + (Math.cos(ang) * d).toFloat(), c.y + (Math.sin(ang) * d).toFloat())
+                        )
                     }
-                    onSend()
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Box(Modifier.fillMaxSize().graphicsLayer { alpha = sendAlpha }.background(accentBrush(), CircleShape))
-            Icon(
-                Icons.AutoMirrored.Filled.Send, stringResource(R.string.send), Modifier.graphicsLayer {
-                    translationX = fly.value * flyPx
-                    alpha = (1f - kotlin.math.abs(fly.value)).coerceIn(0f, 1f)
-                },
-                tint = sendFg
-            )
+                }
+            }
+            Box(
+                Modifier.size(52.dp)
+                    .graphicsLayer { scaleX = sendScale * squish.value; scaleY = sendScale * squish.value }
+                    .pressScale(sendSrc)
+                    .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .clickable(interactionSource = sendSrc, indication = null, enabled = canSend) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        scope.launch {
+                            launch { burst.snapTo(0f); burst.animateTo(1f, tween(560, easing = FastOutSlowInEasing)) }
+                            launch {
+                                squish.animateTo(0.8f, tween(80))
+                                squish.animateTo(1f, spring(dampingRatio = 0.3f, stiffness = Spring.StiffnessLow))
+                            }
+                            fly.animateTo(1f, tween(230, easing = FastOutLinearInEasing))
+                            fly.snapTo(-1f)
+                            fly.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow))
+                        }
+                        onSend()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = sendAlpha }.background(accentBrush(), CircleShape))
+                Icon(
+                    Icons.AutoMirrored.Filled.Send, stringResource(R.string.send), Modifier.graphicsLayer {
+                        translationX = fly.value * flyPx * 1.3f
+                        translationY = -fly.value * flyPx * 0.8f
+                        rotationZ = -fly.value * 22f
+                        val sc = 1f - 0.35f * kotlin.math.abs(fly.value)
+                        scaleX = sc
+                        scaleY = sc
+                        alpha = (1f - kotlin.math.abs(fly.value)).coerceIn(0f, 1f)
+                    },
+                    tint = sendFg
+                )
+            }
         }
     }
 }

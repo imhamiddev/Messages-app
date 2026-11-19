@@ -36,8 +36,13 @@ object SmsSender {
     /** Chat choice -> app default -> system default; drops ids of SIMs that are no longer inserted. */
     fun resolveSub(ctx: Context, requested: Int): Int {
         val wanted = if (requested >= 0) requested else ctx.app.settings.defaultSim.value
-        if (wanted < 0) return -1
         val sims = SimManager.list(ctx)
+        if (wanted < 0) {
+            // System default: resolve it to the actual SIM so the message can show which one it used.
+            if (sims.isEmpty()) return -1
+            val sys = if (sims.size > 1) android.telephony.SubscriptionManager.getDefaultSmsSubscriptionId() else sims[0].subId
+            return if (sims.any { it.subId == sys }) sys else -1
+        }
         return if (sims.isEmpty() || sims.any { it.subId == wanted }) wanted else -1
     }
 

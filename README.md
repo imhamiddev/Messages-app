@@ -26,3 +26,8 @@ Pushing a tag like `v1.0.0` publishes the APK as a GitHub Release.
 ## Notes
 - MMS/group messages are intentionally not supported.
 - Scheduled messages use exact alarms and survive reboots.
+
+
+## Emoji
+
+Messages render emoji from bundled images (`app/src/main/assets/emoji`) taken from the [emoji-datasource-apple](https://github.com/iamcal/emoji-data) package (code MIT). The artwork itself is Apple Inc.'s; keep this repo for personal use or swap the images for another set.
