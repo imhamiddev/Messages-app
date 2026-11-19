@@ -41,18 +41,31 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.0' }}
-        run: gradle :app:assembleRelease --stacktrace 2>&1 | tee build.log
+        shell: bash
+        run: gradle :app:assembleRelease --stacktrace --console=plain 2>&1 | tee build.log
 
       - name: Report build errors on the commit
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '```'; grep -E '^(e: |w: .*error|FAILURE|\* What went wrong|> |.*error:)' build.log | head -80; echo '```'; } > err.md
+          { echo '```'; grep -E '^(e: |FAILURE|\* What went wrong|> )' build.log | sed 's#file:///home/runner/work/Messages-app/Messages-app/##' | head -70; echo '```'; } > err.md
           gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha || github.sha }}/comments" -F body=@err.md
 
       - name: Name the APK
-        run: cp app/build/outputs/apk/release/app-release.apk "Messages-${{ github.ref_name == 'main' && 'latest' || github.ref_name }}.apk" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=$(find app/build/outputs -name '*.apk' | head -1)
+          if [ -z "$APK" ]; then
+            { echo '```'; find app/build/outputs | head -30; echo ---; tail -45 build.log; echo '```'; } > err.md
+            gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha || github.sha }}/comments" -F body=@err.md
+            exit 1
+          fi
+          NAME="${{ github.ref_name == 'main' && 'latest' || github.ref_name }}"
+          NAME="${NAME//\//-}"
+          cp "$APK" "Messages-$NAME.apk"
+          ls -la Messages-*.apk
 
       - uses: actions/upload-artifact@v4
         with:
