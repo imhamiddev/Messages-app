@@ -116,4 +116,8 @@
     <string name="onboarding_default_body">As the default SMS app it can receive new messages and keep your trash in sync.</string>
     <string name="onboarding_default_action">Make default</string>
     <string name="onboarding_skip">Not now</string>
+    <string name="action_select_text">Select text</string>
+    <string name="settings_accent">Accent color</string>
+    <string name="settings_gradient">Bubble gradient</string>
+    <string name="settings_wallpaper">Chat background</string>
 </resources>

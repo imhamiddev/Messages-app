@@ -4,6 +4,21 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -42,51 +57,45 @@ fun Onboarding(smsGranted: Boolean, onChanged: () -> Unit, onSkipDefault: () -> 
         onSkipDefault() // answered either way; don't nag again
     }
 
+    val pulse = rememberInfiniteTransition(label = "pulse")
+    val scale by pulse.animateFloat(
+        initialValue = 1f, targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "scale"
+    )
     Column(
         Modifier.fillMaxSize().systemBarsPadding().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box0 {
-            EmptyStateInline(
-                title = stringResource(if (smsGranted) R.string.onboarding_default_title else R.string.onboarding_title),
-                body = stringResource(if (smsGranted) R.string.onboarding_default_body else R.string.onboarding_body)
-            )
+        Box(
+            Modifier.entrance(0).graphicsLayer { scaleX = scale; scaleY = scale }
+                .size(112.dp).clip(CircleShape).background(accentBrush()),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.ChatBubbleOutline, null, Modifier.size(52.dp), tint = onAccent())
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(28.dp))
+        Text(
+            stringResource(if (smsGranted) R.string.onboarding_default_title else R.string.onboarding_title),
+            Modifier.entrance(1), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(if (smsGranted) R.string.onboarding_default_body else R.string.onboarding_body),
+            Modifier.entrance(2), style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(28.dp))
         if (!smsGranted) {
-            Button(onClick = { permLauncher.launch(perms) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { permLauncher.launch(perms) }, modifier = Modifier.fillMaxWidth().entrance(3)) {
                 Text(stringResource(R.string.onboarding_continue))
             }
         } else {
-            Button(onClick = { roleLauncher.launch(defaultSmsIntent(ctx)) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { roleLauncher.launch(defaultSmsIntent(ctx)) }, modifier = Modifier.fillMaxWidth().entrance(3)) {
                 Text(stringResource(R.string.onboarding_default_action))
             }
-            TextButton(onClick = onSkipDefault) { Text(stringResource(R.string.onboarding_skip)) }
+            TextButton(onClick = onSkipDefault, modifier = Modifier.entrance(4)) { Text(stringResource(R.string.onboarding_skip)) }
         }
-    }
-}
-
-@Composable
-private fun Box0(content: @Composable () -> Unit) = content()
-
-@Composable
-private fun EmptyStateInline(title: String, body: String) {
-    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        androidx.compose.foundation.layout.Box(
-            Modifier.padding(bottom = 20.dp)
-        ) {
-            androidx.compose.material3.Icon(
-                Icons.Default.ChatBubbleOutline, null,
-                Modifier.padding(8.dp).height(72.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-        Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            body, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
     }
 }

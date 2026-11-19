@@ -1,7 +1,17 @@
 package dev.imhamid.messages.ui
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -83,12 +93,58 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp)
 )
 
+val LocalGradient = staticCompositionLocalOf<List<Color>?> { null }
+val LocalWallpaper = staticCompositionLocalOf<List<Color>?> { null }
+
+/** Brush for primary surfaces: the chosen gradient, or the plain accent colour. */
 @Composable
-fun MessagesTheme(dark: Boolean, content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (dark) DarkColors else LightColors,
-        typography = AppTypography,
-        shapes = AppShapes,
-        content = content
+fun accentBrush(): Brush =
+    LocalGradient.current?.let { Brush.linearGradient(it) } ?: SolidColor(MaterialTheme.colorScheme.primary)
+
+/** Content colour that is readable on [accentBrush]. */
+@Composable
+fun onAccent(): Color = if (LocalGradient.current != null) Color.White else MaterialTheme.colorScheme.onPrimary
+
+@Composable
+fun Modifier.wallpaper(): Modifier {
+    val w = LocalWallpaper.current ?: return this
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val a = if (dark) 0.16f else 0.32f
+    return this.background(Brush.linearGradient(w.map { it.copy(alpha = a) }))
+}
+
+private fun schemeFor(dark: Boolean, c: Color): ColorScheme {
+    val base = if (dark) DarkColors else LightColors
+    val tint = 0.05f
+    return if (dark) base.copy(
+        primary = lerp(c, Color.White, 0.35f),
+        onPrimary = lerp(c, Color.Black, 0.75f),
+        primaryContainer = lerp(c, Color.Black, 0.5f),
+        onPrimaryContainer = lerp(c, Color.White, 0.85f),
+        surfaceContainerLow = lerp(base.surfaceContainerLow, c, tint),
+        surfaceContainer = lerp(base.surfaceContainer, c, tint),
+        surfaceContainerHigh = lerp(base.surfaceContainerHigh, c, tint),
+        surfaceContainerHighest = lerp(base.surfaceContainerHighest, c, tint)
+    ) else base.copy(
+        primary = c,
+        onPrimary = Color.White,
+        primaryContainer = lerp(c, Color.White, 0.84f),
+        onPrimaryContainer = lerp(c, Color.Black, 0.62f),
+        surfaceContainerLow = lerp(base.surfaceContainerLow, c, tint),
+        surfaceContainer = lerp(base.surfaceContainer, c, tint),
+        surfaceContainerHigh = lerp(base.surfaceContainerHigh, c, tint),
+        surfaceContainerHighest = lerp(base.surfaceContainerHighest, c, tint)
     )
+}
+
+@Composable
+fun MessagesTheme(dark: Boolean, accent: Int, gradient: Int, wallpaper: Int, content: @Composable () -> Unit) {
+    val c = AccentColors[accent.coerceIn(0, AccentColors.lastIndex)]
+    val scheme = remember(dark, accent) { schemeFor(dark, c) }
+    CompositionLocalProvider(
+        LocalGradient provides BubbleGradients.getOrNull(gradient),
+        LocalWallpaper provides Wallpapers.getOrNull(wallpaper)
+    ) {
+        MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
+    }
 }

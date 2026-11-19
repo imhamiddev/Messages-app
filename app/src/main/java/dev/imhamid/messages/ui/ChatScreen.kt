@@ -1,11 +1,15 @@
 package dev.imhamid.messages.ui
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,20 +21,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -42,6 +47,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.DropdownMenu
@@ -53,8 +59,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -64,15 +68,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,9 +100,9 @@ import dev.imhamid.messages.data.TYPE_SENDING
 import dev.imhamid.messages.sms.Notifier
 import dev.imhamid.messages.sms.SimInfo
 import dev.imhamid.messages.sms.SimManager
-import dev.imhamid.messages.util.CalendarType
 import dev.imhamid.messages.util.DateFmt
 import dev.imhamid.messages.util.PhoneUtils
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,12 +118,15 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
     val fa = rememberIsFa()
     val name by produceState<String?>(null, address) { value = vm.displayName(address) }
     val sims = remember { SimManager.list(ctx) }
+    val openedAt = remember { System.currentTimeMillis() }
+    val played = remember { mutableSetOf<Long>() }
 
     var text by remember { mutableStateOf("") }
     var menuOpen by remember { mutableStateOf(false) }
     var askDeleteChat by remember { mutableStateOf(false) }
     var askBlock by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<MessageEntity?>(null) }
+    var selectingId by remember { mutableStateOf<Long?>(null) }
     var showSchedule by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -125,106 +145,108 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(0)
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
-                    }
-                },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(title, isContact = name != null, size = 38.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                            if (name != null) {
-                                Text(
-                                    DateFmt.digits(address, fa), style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Scaffold(
+            modifier = Modifier.wallpaper(),
+            containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
+                        }
+                    },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(title, isContact = name != null, size = 38.dp, address = address)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                                if (name != null) {
+                                    Text(
+                                        DateFmt.digits(address, fa), style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) {
+                                Icon(Icons.Default.MoreVert, stringResource(R.string.more))
+                            }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(if (pinned) R.string.action_unpin else R.string.action_pin)) },
+                                    leadingIcon = { Icon(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, null) },
+                                    onClick = { menuOpen = false; vm.pin(listOf(key), !pinned) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(if (isBlocked) R.string.action_unblock else R.string.action_block)) },
+                                    leadingIcon = { Icon(Icons.Default.Block, null) },
+                                    onClick = {
+                                        menuOpen = false
+                                        if (isBlocked) vm.unblock(key) else askBlock = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.delete_chat_menu)) },
+                                    leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                    onClick = { menuOpen = false; askDeleteChat = true }
                                 )
                             }
                         }
-                    }
-                },
-                actions = {
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Default.MoreVert, stringResource(R.string.more))
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(if (pinned) R.string.action_unpin else R.string.action_pin)) },
-                                leadingIcon = {
-                                    Icon(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, null)
-                                },
-                                onClick = { menuOpen = false; vm.pin(listOf(key), !pinned) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(if (isBlocked) R.string.action_unblock else R.string.action_block)) },
-                                leadingIcon = { Icon(Icons.Default.Block, null) },
-                                onClick = {
-                                    menuOpen = false
-                                    if (isBlocked) vm.unblock(key) else askBlock = true
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.delete_chat_menu)) },
-                                leadingIcon = { Icon(Icons.Default.Delete, null) },
-                                onClick = { menuOpen = false; askDeleteChat = true }
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
-            )
-        }
-    ) { pad ->
-        Column(Modifier.fillMaxSize().padding(pad)) {
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth(),
-                state = listState,
-                reverseLayout = true
-            ) {
-                itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
-                    val older = messages.getOrNull(i + 1)
-                    Column(Modifier.animateItem()) {
-                        if (older == null || !DateFmt.isSameDay(older.date, m.date)) {
-                            DayHeader(
-                                DateFmt.dayHeader(
-                                    m.date, cal, fa,
-                                    stringResource(R.string.today), stringResource(R.string.yesterday)
-                                )
-                            )
-                        }
-                        Bubble(
-                            m = m, fa = fa,
-                            onCopy = {
-                                clipboard.setText(AnnotatedString(m.body))
-                                Toast.makeText(ctx, ctx.getString(R.string.copied), Toast.LENGTH_SHORT).show()
-                            },
-                            onDelete = { deleteTarget = m },
-                            onResend = { vm.resend(m, effectiveSub) }
-                        )
-                    }
-                }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
             }
-            Composer(
-                text = text,
-                onText = { text = it },
-                sims = sims,
-                effectiveSub = effectiveSub,
-                chatSimSet = pref?.simSubId != null,
-                onPickSim = { vm.setChatSim(key, it) },
-                onSchedule = { showSchedule = true },
-                onSend = {
-                    vm.send(address, text.trim(), effectiveSub)
-                    text = ""
+        ) { pad ->
+            Column(Modifier.fillMaxSize().padding(pad)) {
+                LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, reverseLayout = true) {
+                    itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
+                        val older = messages.getOrNull(i + 1)
+                        Column(Modifier.animateItem()) {
+                            if (older == null || !DateFmt.isSameDay(older.date, m.date)) {
+                                DayHeader(
+                                    DateFmt.dayHeader(
+                                        m.date, cal, fa,
+                                        stringResource(R.string.today), stringResource(R.string.yesterday)
+                                    )
+                                )
+                            }
+                            Bubble(
+                                m = m, fa = fa,
+                                animateIn = m.date >= openedAt && m.id !in played,
+                                onPlayed = { played.add(m.id) },
+                                selecting = selectingId == m.id,
+                                onSelectDone = { if (selectingId == m.id) selectingId = null },
+                                onCopy = {
+                                    clipboard.setText(AnnotatedString(m.body))
+                                    Toast.makeText(ctx, ctx.getString(R.string.copied), Toast.LENGTH_SHORT).show()
+                                },
+                                onSelectText = { selectingId = m.id },
+                                onDelete = { deleteTarget = m },
+                                onResend = { vm.resend(m, effectiveSub) }
+                            )
+                        }
+                    }
                 }
-            )
+                Composer(
+                    text = text,
+                    onText = { text = it },
+                    sims = sims,
+                    effectiveSub = effectiveSub,
+                    chatSimSet = pref?.simSubId != null,
+                    onPickSim = { vm.setChatSim(key, it) },
+                    onSchedule = { showSchedule = true },
+                    onSend = {
+                        vm.send(address, text.trim(), effectiveSub)
+                        text = ""
+                    }
+                )
+            }
         }
     }
 
@@ -282,16 +304,73 @@ private fun DayHeader(label: String) {
     }
 }
 
+/** Read-only text field that starts with the whole message selected, so the system toolbar offers Copy. */
 @Composable
-private fun Bubble(m: MessageEntity, fa: Boolean, onCopy: () -> Unit, onDelete: () -> Unit, onResend: () -> Unit) {
+private fun SelectableBody(text: String, color: Color, onDone: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    var value by remember { mutableStateOf(TextFieldValue(text, TextRange(0, text.length))) }
+    var hadFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    BackHandler { onDone() }
+    BasicTextField(
+        value = value,
+        onValueChange = { value = it },
+        readOnly = true,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = color),
+        cursorBrush = SolidColor(Color.Transparent),
+        modifier = Modifier.focusRequester(focus).onFocusChanged {
+            if (it.isFocused) hadFocus = true else if (hadFocus) onDone()
+        }
+    )
+}
+
+@Composable
+private fun Bubble(
+    m: MessageEntity,
+    fa: Boolean,
+    animateIn: Boolean,
+    onPlayed: () -> Unit,
+    selecting: Boolean,
+    onSelectDone: () -> Unit,
+    onCopy: () -> Unit,
+    onSelectText: () -> Unit,
+    onDelete: () -> Unit,
+    onResend: () -> Unit
+) {
     val out = !m.incoming
+    val grad = LocalGradient.current
     val src = remember { MutableInteractionSource() }
     var menu by remember { mutableStateOf(false) }
+    val appear = remember { Animatable(if (animateIn) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (animateIn) {
+            appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium))
+            onPlayed()
+        }
+    }
     val shape = if (out) RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp) else RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp)
-    val container = if (out) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-    val content = if (out) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val useGradient = out && grad != null
+    val container = when {
+        useGradient -> Color.Transparent
+        out -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val content = when {
+        useGradient -> Color.White
+        out -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val bgMod = if (useGradient) Modifier.background(Brush.linearGradient(grad!!), shape) else Modifier
+
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp).graphicsLayer {
+            alpha = appear.value.coerceIn(0f, 1f)
+            val s = 0.85f + 0.15f * appear.value
+            scaleX = s
+            scaleY = s
+            translationY = (1f - appear.value) * 48f
+            transformOrigin = TransformOrigin(if (out) 1f else 0f, 1f)
+        },
         horizontalArrangement = if (out) Arrangement.End else Arrangement.Start
     ) {
         Box {
@@ -299,11 +378,12 @@ private fun Bubble(m: MessageEntity, fa: Boolean, onCopy: () -> Unit, onDelete: 
                 shape = shape,
                 color = container,
                 contentColor = content,
-                modifier = Modifier.widthIn(max = 300.dp).pressScale(src, 0.97f).clip(shape)
-                    .clickable(interactionSource = src, indication = null) { menu = true }
+                modifier = Modifier.widthIn(max = 300.dp).pressScale(src, 0.97f).then(bgMod).clip(shape)
+                    .clickable(interactionSource = src, indication = null) { if (!selecting) menu = true }
             ) {
-                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
-                    SelectionContainer { Text(m.body, style = MaterialTheme.typography.bodyLarge) }
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp).animateContentSize()) {
+                    if (selecting) SelectableBody(m.body, content, onSelectDone)
+                    else Text(m.body, style = MaterialTheme.typography.bodyLarge)
                     Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                         if (m.type == TYPE_FAILED) {
                             Icon(Icons.Default.ErrorOutline, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.error)
@@ -319,10 +399,12 @@ private fun Bubble(m: MessageEntity, fa: Boolean, onCopy: () -> Unit, onDelete: 
                         )
                         if (out && m.type != TYPE_FAILED) {
                             Spacer(Modifier.width(4.dp))
-                            Icon(
-                                if (m.type == TYPE_SENDING) Icons.Default.Schedule else Icons.Default.Check,
-                                null, Modifier.size(13.dp), tint = content.copy(alpha = 0.7f)
-                            )
+                            AnimatedContent(targetState = m.type == TYPE_SENDING, label = "status") { sending ->
+                                Icon(
+                                    if (sending) Icons.Default.Schedule else Icons.Default.Check,
+                                    null, Modifier.size(13.dp), tint = content.copy(alpha = 0.7f)
+                                )
+                            }
                         }
                     }
                 }
@@ -332,6 +414,11 @@ private fun Bubble(m: MessageEntity, fa: Boolean, onCopy: () -> Unit, onDelete: 
                     text = { Text(stringResource(R.string.action_copy)) },
                     leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
                     onClick = { menu = false; onCopy() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_select_text)) },
+                    leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+                    onClick = { menu = false; onSelectText() }
                 )
                 if (m.type == TYPE_FAILED) {
                     DropdownMenuItem(
@@ -361,60 +448,100 @@ private fun Composer(
     onSchedule: () -> Unit,
     onSend: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
     val canSend = text.isNotBlank()
+    val sendAlpha by animateFloatAsState(if (canSend) 1f else 0f, tween(220), label = "send-alpha")
     val sendScale by animateFloatAsState(
-        if (canSend) 1f else 0.82f,
+        if (canSend) 1f else 0.86f,
         spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "send-scale"
     )
-    val sendBg by animateColorAsState(
-        if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-        label = "send-bg"
+    val clockAlpha by animateFloatAsState(if (canSend) 1f else 0.35f, tween(200), label = "clock-alpha")
+    val clockRot by animateFloatAsState(
+        if (canSend) 0f else -40f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "clock-rot"
     )
     val sendFg by animateColorAsState(
-        if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.outline,
-        label = "send-fg"
+        if (canSend) onAccent() else MaterialTheme.colorScheme.outline, label = "send-fg"
     )
+    val fly = remember { Animatable(0f) }
     val sendSrc = remember { MutableInteractionSource() }
+    val flyPx = with(density) { 44.dp.toPx() }
+
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
         Surface(
-            Modifier.weight(1f),
-            shape = RoundedCornerShape(24.dp),
+            Modifier.weight(1f).animateContentSize(),
+            shape = RoundedCornerShape(26.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.Bottom) {
                 if (sims.size > 1) {
-                    SimChip(sims, effectiveSub, chatSimSet, onPickSim)
+                    Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
+                        SimChip(sims, effectiveSub, chatSimSet, onPickSim)
+                    }
                 }
-                TextField(
-                    value = text, onValueChange = onText,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.type_message)) },
-                    maxLines = 6,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                        unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                Box(
+                    Modifier.weight(1f).heightIn(min = 52.dp).padding(horizontal = 8.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    BasicTextField(
+                        value = text, onValueChange = onText,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        maxLines = 6,
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (text.isEmpty()) {
+                                    Text(
+                                        stringResource(R.string.type_message),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                                inner()
+                            }
+                        }
                     )
-                )
-                IconButton(onClick = onSchedule, enabled = canSend) {
-                    Icon(Icons.Default.Schedule, stringResource(R.string.schedule))
+                }
+                Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                    IconButton(onClick = onSchedule, enabled = canSend) {
+                        Icon(
+                            Icons.Default.Schedule, stringResource(R.string.schedule),
+                            Modifier.graphicsLayer { alpha = clockAlpha; rotationZ = clockRot }
+                        )
+                    }
                 }
             }
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.size(48.dp)
+            Modifier.size(52.dp)
                 .graphicsLayer { scaleX = sendScale; scaleY = sendScale }
                 .pressScale(sendSrc)
-                .clip(CircleShape).background(sendBg)
-                .clickable(interactionSource = sendSrc, indication = null, enabled = canSend) { onSend() },
+                .clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(interactionSource = sendSrc, indication = null, enabled = canSend) {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    scope.launch {
+                        fly.animateTo(1f, tween(140))
+                        fly.snapTo(-1f)
+                        fly.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium))
+                    }
+                    onSend()
+                },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.send), tint = sendFg)
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = sendAlpha }.background(accentBrush(), CircleShape))
+            Icon(
+                Icons.AutoMirrored.Filled.Send, stringResource(R.string.send), Modifier.graphicsLayer {
+                    translationX = fly.value * flyPx
+                    alpha = (1f - kotlin.math.abs(fly.value)).coerceIn(0f, 1f)
+                },
+                tint = sendFg
+            )
         }
     }
 }
@@ -424,13 +551,15 @@ private fun SimChip(sims: List<SimInfo>, effectiveSub: Int, chatSimSet: Boolean,
     var open by remember { mutableStateOf(false) }
     val current = sims.firstOrNull { it.subId == effectiveSub }
     val fa = rememberIsFa()
-    Box(Modifier.padding(start = 6.dp, bottom = 6.dp)) {
+    val src = remember { MutableInteractionSource() }
+    Box {
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.clip(CircleShape).clickable { open = true }
+            modifier = Modifier.height(36.dp).pressScale(src, 0.92f).clip(CircleShape)
+                .clickable(interactionSource = src, indication = null) { open = true }
         ) {
-            Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.SimCard, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
                 Spacer(Modifier.width(4.dp))
                 AnimatedContent(targetState = current?.slot ?: 0, label = "sim-chip") { slot ->

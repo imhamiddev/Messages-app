@@ -116,4 +116,8 @@
     <string name="onboarding_default_body">به‌عنوان برنامه‌ی پیش‌فرض، پیام‌های جدید را دریافت می‌کند و سطل آشغال هم‌گام می‌ماند.</string>
     <string name="onboarding_default_action">پیش‌فرض کن</string>
     <string name="onboarding_skip">فعلاً نه</string>
+    <string name="action_select_text">انتخاب متن</string>
+    <string name="settings_accent">رنگ اصلی</string>
+    <string name="settings_gradient">گرادینت حباب‌ها</string>
+    <string name="settings_wallpaper">پس‌زمینه‌ی چت</string>
 </resources>
