@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,6 +87,7 @@ import dev.imhamid.messages.util.CalendarType
 import dev.imhamid.messages.util.DateFmt
 import dev.imhamid.messages.util.PhoneUtils
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
     val ctx = LocalContext.current
