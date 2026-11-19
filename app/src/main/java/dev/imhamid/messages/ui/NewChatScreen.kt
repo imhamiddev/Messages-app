@@ -154,6 +154,7 @@ fun NewChatScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Uni
                 ResultRow(
                     modifier = Modifier.animateItem(),
                     title = c.name, subtitle = DateFmt.digits(c.number, fa), isContact = true, send = false,
+                    address = c.number,
                     onClick = { onOpen(PhoneUtils.clean(c.number)) }
                 )
             }
@@ -168,6 +169,7 @@ private fun ResultRow(
     subtitle: String?,
     isContact: Boolean,
     send: Boolean,
+    address: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -176,12 +178,12 @@ private fun ResultRow(
     ) {
         if (send) {
             Box(
-                Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                Modifier.size(48.dp).clip(CircleShape).background(accentBrush()),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, null, tint = MaterialTheme.colorScheme.onPrimary)
+                Icon(Icons.AutoMirrored.Filled.Send, null, tint = onAccent())
             }
-        } else Avatar(title, isContact)
+        } else Avatar(title, isContact, address = address)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)

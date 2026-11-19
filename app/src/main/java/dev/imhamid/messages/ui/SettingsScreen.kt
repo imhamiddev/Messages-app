@@ -11,6 +11,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,8 +60,8 @@ fun defaultSmsIntent(ctx: Context): Intent =
     }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+private fun Section(title: String, index: Int, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().entrance(index).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(
             title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -75,6 +78,9 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val defaultSim by vm.defaultSim.collectAsStateWithLifecycle()
     val importing by vm.repo.importing.collectAsStateWithLifecycle()
     val imported by vm.repo.imported.collectAsStateWithLifecycle()
+    val accent by vm.accent.collectAsStateWithLifecycle()
+    val gradient by vm.gradient.collectAsStateWithLifecycle()
+    val wallpaper by vm.wallpaper.collectAsStateWithLifecycle()
     val fa = rememberIsFa()
 
     var tick by remember { mutableIntStateOf(0) }
@@ -96,7 +102,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
         topBar = { AppTopBar(stringResource(R.string.settings_title), onBack) }
     ) { pad ->
         Column(Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState())) {
-            Section(stringResource(R.string.settings_language)) {
+            Section(stringResource(R.string.settings_language), 0) {
                 Segmented(
                     listOf(stringResource(R.string.lang_system), stringResource(R.string.lang_fa), stringResource(R.string.lang_en)),
                     langIndex
@@ -107,7 +113,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     )
                 }
             }
-            Section(stringResource(R.string.settings_calendar)) {
+            Section(stringResource(R.string.settings_calendar), 1) {
                 Segmented(
                     listOf(stringResource(R.string.cal_jalali), stringResource(R.string.cal_gregorian)),
                     if (cal == CalendarType.JALALI) 0 else 1
@@ -118,13 +124,32 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Section(stringResource(R.string.settings_theme)) {
+            Section(stringResource(R.string.settings_theme), 2) {
                 Segmented(
                     listOf(stringResource(R.string.theme_system), stringResource(R.string.theme_light), stringResource(R.string.theme_dark)),
                     theme
                 ) { vm.settings.setTheme(it) }
             }
-            Section(stringResource(R.string.settings_sim)) {
+            Section(stringResource(R.string.settings_accent), 3) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AccentColors.forEachIndexed { i, c -> Swatch(accent == i, SolidColor(c)) { vm.settings.setAccent(i) } }
+                }
+            }
+            Section(stringResource(R.string.settings_gradient), 4) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    BubbleGradients.forEachIndexed { i, g ->
+                        Swatch(gradient == i, g?.let { Brush.linearGradient(it) }) { vm.settings.setGradient(i) }
+                    }
+                }
+            }
+            Section(stringResource(R.string.settings_wallpaper), 5) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Wallpapers.forEachIndexed { i, g ->
+                        Swatch(wallpaper == i, g?.let { Brush.linearGradient(it) }) { vm.settings.setWallpaper(i) }
+                    }
+                }
+            }
+            Section(stringResource(R.string.settings_sim), 3) {
                 if (!phoneGranted) {
                     Text(
                         stringResource(R.string.sim_permission_hint),
@@ -144,7 +169,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            Section(stringResource(R.string.settings_default_app)) {
+            Section(stringResource(R.string.settings_default_app), 4) {
                 Text(
                     stringResource(if (isDefault) R.string.default_app_yes else R.string.default_app_no),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -156,7 +181,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            Section(stringResource(R.string.settings_import)) {
+            Section(stringResource(R.string.settings_import), 5) {
                 Text(
                     stringResource(R.string.import_hint),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -3,6 +3,8 @@ package dev.imhamid.messages.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,7 +25,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -90,6 +104,13 @@ fun ChatListScreen(
     val listState = rememberLazyListState()
     val fabExpanded by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     val list = threads
+    var introDone by remember { mutableStateOf(false) }
+    var fabVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        fabVisible = true
+        delay(900)
+        introDone = true
+    }
 
     BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
     LaunchedEffect(list) {
@@ -167,16 +188,27 @@ fun ChatListScreen(
         },
         floatingActionButton = {
             val src = remember { MutableInteractionSource() }
-            ExtendedFloatingActionButton(
-                onClick = onNew,
-                expanded = fabExpanded,
-                interactionSource = src,
-                modifier = Modifier.pressScale(src),
-                icon = { Icon(Icons.Default.Add, null) },
-                text = { Text(stringResource(R.string.new_chat)) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
+            val pressed by src.collectIsPressedAsState()
+            val rot by animateFloatAsState(if (pressed) 90f else 0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "fab-rot")
+            val fabShape = RoundedCornerShape(20.dp)
+            AnimatedVisibility(
+                visible = fabVisible,
+                enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)),
+                exit = scaleOut()
+            ) {
+                ExtendedFloatingActionButton(
+                    onClick = onNew,
+                    expanded = fabExpanded,
+                    interactionSource = src,
+                    shape = fabShape,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                    modifier = Modifier.pressScale(src).shadow(8.dp, fabShape).clip(fabShape).background(accentBrush()),
+                    icon = { Icon(Icons.Default.Add, null, Modifier.graphicsLayer { rotationZ = rot }) },
+                    text = { Text(stringResource(R.string.new_chat)) },
+                    containerColor = Color.Transparent,
+                    contentColor = onAccent()
+                )
+            }
         }
     ) { pad ->
         Box(Modifier.fillMaxSize().padding(pad)) {
@@ -188,9 +220,9 @@ fun ChatListScreen(
                     stringResource(R.string.no_chats_hint)
                 )
                 else -> LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp)) {
-                    items(list, key = { it.key }) { t ->
+                    itemsIndexed(list, key = { _, t -> t.key }) { index, t ->
                         ChatRow(
-                            modifier = Modifier.animateItem(),
+                            modifier = Modifier.animateItem().entrance(index, play = !introDone),
                             t = t, cal = cal, fa = fa,
                             selected = t.key in selected,
                             onClick = {
@@ -249,6 +281,7 @@ private fun ChatRow(
     onClick: () -> Unit,
     onLong: () -> Unit
 ) {
+    val src = remember { MutableInteractionSource() }
     val bg by animateColorAsState(
         if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else MaterialTheme.colorScheme.background,
         label = "row-bg"
@@ -256,12 +289,12 @@ private fun ChatRow(
     val unread = t.unread > 0
     val prefix = if (!t.last.incoming) stringResource(R.string.you_prefix) else ""
     Row(
-        modifier.fillMaxWidth().background(bg)
-            .combinedClickable(onClick = onClick, onLongClick = onLong)
+        modifier.fillMaxWidth().pressScale(src, 0.97f).background(bg)
+            .combinedClickable(interactionSource = src, indication = LocalIndication.current, onClick = onClick, onLongClick = onLong)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Avatar(title = t.title, isContact = t.name != null, selected = selected)
+        Avatar(title = t.title, isContact = t.name != null, selected = selected, address = t.address)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -270,7 +303,11 @@ private fun ChatRow(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = if (unread) FontWeight.Bold else FontWeight.Medium
                 )
-                if (t.pinned) {
+                AnimatedVisibility(
+                    visible = t.pinned,
+                    enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                    exit = scaleOut() + fadeOut()
+                ) {
                     Icon(
                         Icons.Filled.PushPin, null, Modifier.padding(horizontal = 6.dp).size(14.dp),
                         tint = MaterialTheme.colorScheme.outline
@@ -291,18 +328,33 @@ private fun ChatRow(
                     color = if (t.last.type == TYPE_FAILED) MaterialTheme.colorScheme.error
                     else if (unread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (unread) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(
-                        Modifier.height(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            DateFmt.digits(if (t.unread > 99) "99+" else t.unread.toString(), fa),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                AnimatedVisibility(
+                    visible = unread,
+                    enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                    exit = scaleOut() + fadeOut()
+                ) {
+                    Row {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier.height(22.dp).clip(CircleShape).background(accentBrush())
+                                .padding(horizontal = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AnimatedContent(
+                                targetState = t.unread,
+                                transitionSpec = {
+                                    (scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn()) togetherWith
+                                        (scaleOut() + fadeOut())
+                                },
+                                label = "badge"
+                            ) { n ->
+                                Text(
+                                    DateFmt.digits(if (n > 99) "99+" else n.toString(), fa),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = onAccent()
+                                )
+                            }
+                        }
                     }
                 }
             }

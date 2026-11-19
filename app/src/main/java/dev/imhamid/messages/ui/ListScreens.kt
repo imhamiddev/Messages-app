@@ -91,7 +91,7 @@ fun TrashScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Modifier.animateItem().fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Avatar(name ?: m.address, isContact = name != null, size = 42.dp)
+                            Avatar(name ?: m.address, isContact = name != null, size = 42.dp, address = m.address)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name ?: m.address, maxLines = 1, style = MaterialTheme.typography.titleSmall)
@@ -151,7 +151,7 @@ fun BlockedScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Modifier.animateItem().fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Avatar(name ?: b.address, isContact = name != null, size = 42.dp)
+                            Avatar(name ?: b.address, isContact = name != null, size = 42.dp, address = b.address)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name ?: DateFmt.digits(b.address, fa), maxLines = 1, style = MaterialTheme.typography.titleSmall)
@@ -197,7 +197,7 @@ fun ScheduledScreen(vm: MainViewModel, onBack: () -> Unit) {
                             Modifier.animateItem().fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Avatar(name ?: s.address, isContact = name != null, size = 42.dp)
+                            Avatar(name ?: s.address, isContact = name != null, size = 42.dp, address = s.address)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(name ?: DateFmt.digits(s.address, fa), maxLines = 1, style = MaterialTheme.typography.titleSmall)
