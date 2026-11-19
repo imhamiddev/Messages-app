@@ -1,5 +1,6 @@
 package dev.imhamid.messages.sms
 
+import dev.imhamid.messages.util.Smart
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -18,6 +19,8 @@ object Notifier {
     private const val CHANNEL = "messages"
     const val ACTION_REPLY = "dev.imhamid.messages.NOTIF_REPLY"
     const val ACTION_DELETE = "dev.imhamid.messages.NOTIF_DELETE"
+    const val ACTION_COPY = "dev.imhamid.messages.NOTIF_COPY"
+    const val EXTRA_CODE = "code"
     const val KEY_REPLY = "reply_text"
     const val EXTRA_KEY = "thread_key"
     const val EXTRA_ADDRESS = "address"
@@ -68,6 +71,15 @@ object Notifier {
             .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_DELETE)
             .setShowsUserInterface(false)
             .build()
+        val code = Smart.verificationCode(m.body)
+        val copyAction = code?.let {
+            val pi = PendingIntent.getBroadcast(
+                ctx, m.threadKey.hashCode() * 31 + 3,
+                Intent(base).setAction(ACTION_COPY).putExtra(EXTRA_CODE, it),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            NotificationCompat.Action.Builder(R.drawable.ic_copy, ctx.getString(R.string.notif_copy_code), pi).build()
+        }
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(name ?: m.address)
@@ -77,6 +89,7 @@ object Notifier {
             .setAutoCancel(true)
             .setWhen(m.date)
             .setContentIntent(pi)
+            .also { b -> copyAction?.let { b.addAction(it) } }
             .addAction(replyAction)
             .addAction(deleteAction)
             .build()

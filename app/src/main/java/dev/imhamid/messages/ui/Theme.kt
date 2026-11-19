@@ -1,5 +1,11 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import android.os.Build
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -126,13 +132,26 @@ private fun schemeFor(dark: Boolean, c: Color): ColorScheme {
     )
 }
 
+val FontScales = floatArrayOf(0.88f, 1.0f, 1.15f, 1.3f)
+
 @Composable
-fun MessagesTheme(dark: Boolean, bubble: Int, content: @Composable () -> Unit) {
+fun MessagesTheme(dark: Boolean, bubble: Int, dynamic: Boolean, fontIndex: Int, content: @Composable () -> Unit) {
     val style = BubbleStyles[bubble.coerceIn(0, BubbleStyles.lastIndex)]
     // The accent follows the bubble colour (middle of the gradient for two-colour styles).
     val c = if (style.size > 1) lerp(style.first(), style.last(), 0.5f) else style.first()
-    val scheme = remember(dark, bubble) { schemeFor(dark, c) }
-    CompositionLocalProvider(LocalGradient provides style.takeIf { it.size > 1 }) {
+    val ctx = LocalContext.current
+    val scheme = remember(dark, bubble, dynamic) {
+        if (dynamic && Build.VERSION.SDK_INT >= 31) {
+            if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+        } else schemeFor(dark, c)
+    }
+    val useGradient = !(dynamic && Build.VERSION.SDK_INT >= 31)
+    val d = LocalDensity.current
+    val scale = FontScales[fontIndex.coerceIn(0, FontScales.lastIndex)]
+    CompositionLocalProvider(
+        LocalDensity provides Density(d.density, d.fontScale * scale),
+        LocalGradient provides (if (useGradient) style.takeIf { it.size > 1 } else null)
+    ) {
         MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
     }
 }

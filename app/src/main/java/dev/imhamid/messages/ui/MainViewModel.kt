@@ -32,6 +32,9 @@ data class ThreadItem(
     val pinned: Boolean,
     val pinnedAt: Long
 ) {
+    val category: dev.imhamid.messages.util.Category by lazy {
+        dev.imhamid.messages.util.Smart.categorize(address, last.body, name != null)
+    }
     val title: String get() = name ?: address
 }
 
@@ -44,6 +47,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val theme = settings.theme
     val defaultSim = settings.defaultSim
     val bubble = settings.bubble
+    val dynamic = settings.dynamic
+    val fontScale = settings.fontScale
 
     /** null until the first database result arrives, so the UI doesn't flash an empty state. */
     val threads: StateFlow<List<ThreadItem>?> = combine(
@@ -77,6 +82,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun displayName(address: String): String? =
         withContext(Dispatchers.IO) { repo.contacts.nameFor(address) }
+
+    suspend fun search(q: String): List<MessageEntity> = repo.search(q)
 
     suspend fun searchContacts(q: String): List<Contact> = repo.contacts.search(q)
 

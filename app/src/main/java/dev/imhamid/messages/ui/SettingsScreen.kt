@@ -1,5 +1,6 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.material3.Switch
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.OutlinedIconButton
 import android.Manifest
@@ -130,7 +131,29 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     theme
                 ) { vm.settings.setTheme(it) }
             }
-            Section(stringResource(R.string.settings_gradient), 3) {
+            val fontIdx by vm.fontScale.collectAsStateWithLifecycle()
+            val dynamic by vm.dynamic.collectAsStateWithLifecycle()
+            Section(stringResource(R.string.settings_font), 3) {
+                Segmented(
+                    listOf(
+                        stringResource(R.string.font_small), stringResource(R.string.font_normal),
+                        stringResource(R.string.font_large), stringResource(R.string.font_xlarge)
+                    ),
+                    fontIdx
+                ) { vm.settings.setFontScale(it) }
+            }
+            if (Build.VERSION.SDK_INT >= 31) {
+                Section(stringResource(R.string.settings_material_you), 3) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.material_you_hint), Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Switch(checked = dynamic, onCheckedChange = { vm.settings.setDynamic(it) })
+                    }
+                }
+            }
+            if (!(dynamic && Build.VERSION.SDK_INT >= 31)) Section(stringResource(R.string.settings_gradient), 3) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     BubbleStyles.forEachIndexed { i, colors ->
                         val brush = if (colors.size > 1) Brush.linearGradient(colors) else SolidColor(colors.first())

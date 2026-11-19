@@ -1,5 +1,11 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.Search
+import dev.imhamid.messages.util.Category
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -91,7 +97,8 @@ fun ChatListScreen(
     onSettings: () -> Unit,
     onTrash: () -> Unit,
     onBlocked: () -> Unit,
-    onScheduled: () -> Unit
+    onScheduled: () -> Unit,
+    onSearch: () -> Unit
 ) {
     val threads by vm.threads.collectAsStateWithLifecycle()
     val cal by vm.calendar.collectAsStateWithLifecycle()
@@ -103,7 +110,8 @@ fun ChatListScreen(
     var menuOpen by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val fabExpanded by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
-    val list = threads
+    var cat by remember { mutableStateOf<Category?>(null) }
+    val list = threads?.let { l -> if (cat == null) l else l.filter { it.category == cat } }
     var introDone by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -157,6 +165,9 @@ fun ChatListScreen(
                     TopAppBar(
                         title = { Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall) },
                         actions = {
+                            IconButton(onClick = onSearch) {
+                                Icon(Icons.Default.Search, stringResource(R.string.search))
+                            }
                             Box {
                                 IconButton(onClick = { menuOpen = true }) {
                                     Icon(Icons.Default.MoreVert, stringResource(R.string.more))
@@ -211,7 +222,9 @@ fun ChatListScreen(
             }
         }
     ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad)) {
+        Column(Modifier.fillMaxSize().padding(pad)) {
+        CategoryTabs(cat) { cat = it }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 list == null -> Unit
                 list.isEmpty() -> EmptyState(
@@ -238,6 +251,7 @@ fun ChatListScreen(
                     }
                 }
             }
+        }
         }
     }
 
@@ -358,6 +372,28 @@ private fun ChatRow(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTabs(selected: Category?, onSelect: (Category?) -> Unit) {
+    val items = listOf<Pair<Category?, Int>>(
+        null to R.string.cat_all,
+        Category.PERSONAL to R.string.cat_personal,
+        Category.BANK to R.string.cat_bank,
+        Category.CODES to R.string.cat_codes,
+        Category.PROMO to R.string.cat_promo
+    )
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items.forEach { (c, label) ->
+            FilterChip(
+                selected = selected == c, onClick = { onSelect(c) },
+                label = { Text(stringResource(label)) }
+            )
         }
     }
 }
