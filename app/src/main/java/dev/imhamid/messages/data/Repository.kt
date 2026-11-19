@@ -161,6 +161,8 @@ class Repository(
 
     suspend fun setStatus(id: Long, type: Int) = withContext(Dispatchers.IO) { messages.setType(id, type) }
 
+    suspend fun setStatusIfSending(id: Long, type: Int) = withContext(Dispatchers.IO) { messages.setTypeIfSending(id, type) }
+
     suspend fun markRead(key: String) = withContext(Dispatchers.IO) {
         if (isDefaultSms()) {
             messages.unreadProviderIds(key).forEach { pid ->

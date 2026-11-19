@@ -5,6 +5,7 @@ import android.content.Context
 import dev.imhamid.messages.data.AppDatabase
 import dev.imhamid.messages.data.ContactsRepo
 import dev.imhamid.messages.data.Repository
+import dev.imhamid.messages.sms.Notifier
 
 class App : Application() {
     lateinit var settings: SettingsStore
@@ -16,6 +17,7 @@ class App : Application() {
         super.onCreate()
         settings = SettingsStore(this)
         repo = Repository(this, AppDatabase.build(this), ContactsRepo(this), settings)
+        Notifier.ensureChannel(this)
     }
 }
 
