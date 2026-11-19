@@ -2,4 +2,118 @@
 <resources>
     <string name="app_name">پیام‌ها</string>
     <string name="channel_messages">پیام‌ها</string>
+
+    <string name="back">بازگشت</string>
+    <string name="more">بیشتر</string>
+    <string name="action_cancel">انصراف</string>
+    <string name="action_done">تأیید</string>
+    <string name="action_allow">اجازه دادن</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_move_to_trash">انتقال به سطل آشغال</string>
+    <string name="action_block">مسدود کردن</string>
+    <string name="action_unblock">رفع مسدودی</string>
+    <string name="action_pin">پین کردن</string>
+    <string name="action_unpin">برداشتن پین</string>
+    <string name="action_copy">کپی پیام</string>
+    <string name="action_resend">ارسال دوباره</string>
+    <string name="copied">کپی شد</string>
+    <string name="today">امروز</string>
+    <string name="yesterday">دیروز</string>
+    <string name="you_prefix">شما: </string>
+
+    <string name="menu_scheduled">پیام‌های زمان‌بندی‌شده</string>
+    <string name="menu_trash">سطل آشغال</string>
+    <string name="menu_blocked">شماره‌های مسدود</string>
+    <string name="menu_settings">تنظیمات</string>
+
+    <string name="new_chat">چت جدید</string>
+    <string name="no_chats">هنوز گفتگویی ندارید</string>
+    <string name="no_chats_hint">برای نوشتن اولین پیام روی «چت جدید» بزنید.</string>
+    <string name="selected_count">%1$d انتخاب شده</string>
+    <string name="delete_chats_title">انتقال به سطل آشغال؟</string>
+    <string name="delete_chats_body">گفتگوهای انتخاب‌شده به سطل آشغال منتقل می‌شوند و تا ۳۰ روز قابل بازیابی‌اند.</string>
+    <string name="delete_chat_menu">حذف گفتگو</string>
+    <string name="delete_message_title">پیام حذف شود؟</string>
+    <string name="delete_message_body">پیام به سطل آشغال منتقل می‌شود و تا ۳۰ روز قابل بازیابی است.</string>
+    <string name="block_title">این شماره مسدود شود؟</string>
+    <string name="block_body">پیام‌های این شماره پنهان می‌شوند و اعلانی نمی‌بینید.</string>
+
+    <string name="type_message">پیام</string>
+    <string name="send">ارسال</string>
+    <string name="not_sent">ارسال نشد</string>
+    <string name="sim_label">سیم‌کارت %1$d</string>
+    <string name="sim_auto">خودکار</string>
+    <string name="sim_default_option">پیش‌فرض</string>
+    <string name="choose_sim">ارسال با</string>
+
+    <string name="schedule">زمان‌بندی</string>
+    <string name="schedule_title">زمان‌بندی پیام</string>
+    <string name="schedule_confirm">زمان‌بندی کن</string>
+    <string name="schedule_toast">پیام زمان‌بندی شد</string>
+    <string name="schedule_past">زمانی در آینده انتخاب کنید</string>
+    <string name="label_year">سال</string>
+    <string name="label_month">ماه</string>
+    <string name="label_day">روز</string>
+    <string name="label_hour">ساعت</string>
+    <string name="label_minute">دقیقه</string>
+    <string name="scheduled_title">پیام‌های زمان‌بندی‌شده</string>
+    <string name="scheduled_empty">پیام زمان‌بندی‌شده‌ای وجود ندارد</string>
+    <string name="scheduled_sent">ارسال شد</string>
+    <string name="scheduled_failed">ناموفق</string>
+    <string name="scheduled_pending">در انتظار</string>
+    <string name="scheduled_cancel_title">این پیام زمان‌بندی‌شده لغو شود؟</string>
+    <string name="scheduled_cancel_body">پیام ارسال نخواهد شد.</string>
+    <string name="scheduled_remove">حذف از فهرست</string>
+
+    <string name="new_chat_hint">نام یا شماره تلفن</string>
+    <string name="send_to_number">ارسال به %1$s</string>
+    <string name="contacts_permission_hint">برای جستجو با نام، دسترسی به مخاطبین را مجاز کنید.</string>
+    <string name="no_results">مخاطبی پیدا نشد</string>
+
+    <string name="trash_title">سطل آشغال</string>
+    <string name="trash_empty">سطل آشغال خالی است</string>
+    <string name="trash_note">موارد بعد از ۳۰ روز به‌صورت خودکار حذف می‌شوند.</string>
+    <string name="restore">بازیابی</string>
+    <string name="delete_forever">حذف همیشگی</string>
+    <string name="delete_forever_title">برای همیشه حذف شود؟</string>
+    <string name="delete_forever_body">این پیام دیگر قابل بازیابی نخواهد بود.</string>
+    <string name="empty_trash">خالی کردن سطل</string>
+    <string name="empty_trash_title">سطل آشغال خالی شود؟</string>
+    <string name="empty_trash_body">همه‌ی موارد داخل سطل برای همیشه حذف می‌شوند.</string>
+
+    <string name="blocked_title">شماره‌های مسدود</string>
+    <string name="blocked_empty">شماره‌ی مسدودی وجود ندارد</string>
+
+    <string name="settings_title">تنظیمات</string>
+    <string name="settings_language">زبان</string>
+    <string name="lang_system">سیستم</string>
+    <string name="lang_fa">فارسی</string>
+    <string name="lang_en">English</string>
+    <string name="settings_calendar">تقویم</string>
+    <string name="cal_jalali">شمسی</string>
+    <string name="cal_gregorian">میلادی</string>
+    <string name="settings_theme">ظاهر</string>
+    <string name="theme_system">سیستم</string>
+    <string name="theme_light">روشن</string>
+    <string name="theme_dark">تیره</string>
+    <string name="settings_sim">سیم‌کارت پیش‌فرض برای ارسال</string>
+    <string name="sim_system_default">پیش‌فرض سیستم</string>
+    <string name="sim_permission_hint">برای نمایش سیم‌کارت‌ها دسترسی تلفن را مجاز کنید.</string>
+    <string name="settings_default_app">برنامه‌ی پیش‌فرض پیامک</string>
+    <string name="default_app_yes">پیام‌ها برنامه‌ی پیش‌فرض پیامک شماست</string>
+    <string name="default_app_no">برای دریافت، ارسال و حذف پیام‌ها آن را پیش‌فرض کنید</string>
+    <string name="set_default">پیش‌فرض کن</string>
+    <string name="settings_import">پیام‌های گوشی</string>
+    <string name="import_hint">پیامک‌های ذخیره‌شده روی گوشی را به این برنامه منتقل کنید.</string>
+    <string name="import_now">دریافت</string>
+    <string name="importing">در حال دریافت… %1$d</string>
+    <string name="import_done">به‌روز است</string>
+
+    <string name="onboarding_title">به پیام‌ها خوش آمدید</string>
+    <string name="onboarding_body">برای خواندن، ارسال و دریافت پیامک، برنامه به دسترسی پیامک، مخاطبین و سیم‌کارت‌ها نیاز دارد.</string>
+    <string name="onboarding_continue">ادامه</string>
+    <string name="onboarding_default_title">پیام‌ها را برنامه‌ی پیش‌فرض کنید</string>
+    <string name="onboarding_default_body">به‌عنوان برنامه‌ی پیش‌فرض، پیام‌های جدید را دریافت می‌کند و سطل آشغال هم‌گام می‌ماند.</string>
+    <string name="onboarding_default_action">پیش‌فرض کن</string>
+    <string name="onboarding_skip">فعلاً نه</string>
 </resources>

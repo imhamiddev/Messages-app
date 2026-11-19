@@ -2,4 +2,118 @@
 <resources>
     <string name="app_name">Messages</string>
     <string name="channel_messages">Messages</string>
+
+    <string name="back">Back</string>
+    <string name="more">More</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_done">Done</string>
+    <string name="action_allow">Allow</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_move_to_trash">Move to trash</string>
+    <string name="action_block">Block</string>
+    <string name="action_unblock">Unblock</string>
+    <string name="action_pin">Pin</string>
+    <string name="action_unpin">Unpin</string>
+    <string name="action_copy">Copy message</string>
+    <string name="action_resend">Send again</string>
+    <string name="copied">Copied</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
+    <string name="you_prefix">You: </string>
+
+    <string name="menu_scheduled">Scheduled messages</string>
+    <string name="menu_trash">Trash</string>
+    <string name="menu_blocked">Blocked numbers</string>
+    <string name="menu_settings">Settings</string>
+
+    <string name="new_chat">New chat</string>
+    <string name="no_chats">No conversations yet</string>
+    <string name="no_chats_hint">Tap “New chat” to write your first message.</string>
+    <string name="selected_count">%1$d selected</string>
+    <string name="delete_chats_title">Move to trash?</string>
+    <string name="delete_chats_body">The selected conversations will be moved to the trash. You can restore them within 30 days.</string>
+    <string name="delete_chat_menu">Delete conversation</string>
+    <string name="delete_message_title">Delete message?</string>
+    <string name="delete_message_body">The message will be moved to the trash. You can restore it within 30 days.</string>
+    <string name="block_title">Block this number?</string>
+    <string name="block_body">Messages from it will be hidden and won’t notify you.</string>
+
+    <string name="type_message">Message</string>
+    <string name="send">Send</string>
+    <string name="not_sent">Not sent</string>
+    <string name="sim_label">SIM %1$d</string>
+    <string name="sim_auto">Auto</string>
+    <string name="sim_default_option">Default</string>
+    <string name="choose_sim">Send with</string>
+
+    <string name="schedule">Schedule</string>
+    <string name="schedule_title">Schedule message</string>
+    <string name="schedule_confirm">Schedule</string>
+    <string name="schedule_toast">Message scheduled</string>
+    <string name="schedule_past">Pick a time in the future</string>
+    <string name="label_year">Year</string>
+    <string name="label_month">Month</string>
+    <string name="label_day">Day</string>
+    <string name="label_hour">Hour</string>
+    <string name="label_minute">Minute</string>
+    <string name="scheduled_title">Scheduled messages</string>
+    <string name="scheduled_empty">No scheduled messages</string>
+    <string name="scheduled_sent">Sent</string>
+    <string name="scheduled_failed">Failed</string>
+    <string name="scheduled_pending">Waiting</string>
+    <string name="scheduled_cancel_title">Cancel this scheduled message?</string>
+    <string name="scheduled_cancel_body">It will not be sent.</string>
+    <string name="scheduled_remove">Remove</string>
+
+    <string name="new_chat_hint">Name or phone number</string>
+    <string name="send_to_number">Send to %1$s</string>
+    <string name="contacts_permission_hint">Allow access to your contacts to search by name.</string>
+    <string name="no_results">No matching contacts</string>
+
+    <string name="trash_title">Trash</string>
+    <string name="trash_empty">Trash is empty</string>
+    <string name="trash_note">Items are removed automatically after 30 days.</string>
+    <string name="restore">Restore</string>
+    <string name="delete_forever">Delete forever</string>
+    <string name="delete_forever_title">Delete permanently?</string>
+    <string name="delete_forever_body">This message can’t be recovered.</string>
+    <string name="empty_trash">Empty trash</string>
+    <string name="empty_trash_title">Empty trash?</string>
+    <string name="empty_trash_body">Everything in the trash will be permanently deleted.</string>
+
+    <string name="blocked_title">Blocked numbers</string>
+    <string name="blocked_empty">No blocked numbers</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_language">Language</string>
+    <string name="lang_system">System</string>
+    <string name="lang_fa">فارسی</string>
+    <string name="lang_en">English</string>
+    <string name="settings_calendar">Calendar</string>
+    <string name="cal_jalali">Shamsi</string>
+    <string name="cal_gregorian">Gregorian</string>
+    <string name="settings_theme">Appearance</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_sim">Default SIM for sending</string>
+    <string name="sim_system_default">System default</string>
+    <string name="sim_permission_hint">Allow phone access to list your SIM cards.</string>
+    <string name="settings_default_app">Default SMS app</string>
+    <string name="default_app_yes">Messages is your default SMS app</string>
+    <string name="default_app_no">Set as default to receive, send and delete messages</string>
+    <string name="set_default">Set default</string>
+    <string name="settings_import">Phone messages</string>
+    <string name="import_hint">Copy the text messages stored on your phone into this app.</string>
+    <string name="import_now">Import</string>
+    <string name="importing">Importing… %1$d</string>
+    <string name="import_done">Up to date</string>
+
+    <string name="onboarding_title">Welcome to Messages</string>
+    <string name="onboarding_body">To read, send and receive text messages the app needs access to SMS, contacts and your SIM cards.</string>
+    <string name="onboarding_continue">Continue</string>
+    <string name="onboarding_default_title">Make Messages your default app</string>
+    <string name="onboarding_default_body">As the default SMS app it can receive new messages and keep your trash in sync.</string>
+    <string name="onboarding_default_action">Make default</string>
+    <string name="onboarding_skip">Not now</string>
 </resources>

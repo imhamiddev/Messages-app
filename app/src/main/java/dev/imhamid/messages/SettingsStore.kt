@@ -21,6 +21,11 @@ class SettingsStore(ctx: Context) {
     private val _theme = MutableStateFlow(sp.getInt("theme", 0))
     val theme: StateFlow<Int> = _theme
 
+    /** True once the user has answered the "make default SMS app" prompt (accepted or skipped). */
+    var defaultPromptDismissed: Boolean
+        get() = sp.getBoolean("default_prompt_dismissed", false)
+        set(v) = sp.edit().putBoolean("default_prompt_dismissed", v).apply()
+
     fun setCalendar(c: CalendarType) {
         _calendar.value = c
         sp.edit().putString("calendar", c.name).apply()
