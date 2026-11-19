@@ -52,7 +52,19 @@ jobs:
           gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha || github.sha }}/comments" -F body=@err.md
 
       - name: Name the APK
-        run: cp app/build/outputs/apk/release/app-release.apk "Messages-${{ github.ref_name == 'main' && 'latest' || github.ref_name }}.apk" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=$(find app/build/outputs -name '*.apk' | head -1)
+          if [ -z "$APK" ]; then
+            { echo '```'; find app/build -maxdepth 6 | head -60; echo '```'; } > err.md
+            gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha || github.sha }}/comments" -F body=@err.md
+            exit 1
+          fi
+          NAME="${{ github.ref_name == 'main' && 'latest' || github.ref_name }}"
+          NAME="${NAME//\//-}"
+          cp "$APK" "Messages-$NAME.apk"
+          ls -la Messages-*.apk
 
       - uses: actions/upload-artifact@v4
         with:
