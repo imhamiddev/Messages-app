@@ -41,7 +41,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.0' }}
-        run: gradle :app:assembleRelease --stacktrace 2>&1 | tee build.log
+        run: gradle :app:assembleRelease --stacktrace --console=plain 2>&1 | tee build.log
 
       - name: Report build errors on the commit
         if: failure()
@@ -57,7 +57,7 @@ jobs:
         run: |
           APK=$(find app/build/outputs -name '*.apk' | head -1)
           if [ -z "$APK" ]; then
-            { echo '```'; find app/build -maxdepth 6 | head -60; echo '```'; } > err.md
+            { echo '```'; find app/build/outputs | head -30; echo ---; tail -45 build.log; echo '```'; } > err.md
             gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha || github.sha }}/comments" -F body=@err.md
             exit 1
           fi
