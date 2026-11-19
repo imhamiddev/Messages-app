@@ -145,4 +145,5 @@
     <string name="font_xlarge">Huge</string>
     <string name="settings_material_you">Material You colors</string>
     <string name="material_you_hint">Use the colors of your wallpaper</string>
+    <string name="link_open_failed">Couldn\'t open the link</string>
 </resources>

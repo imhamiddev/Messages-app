@@ -1,5 +1,9 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.layout.onSizeChanged
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
 import dev.imhamid.messages.util.LinkKind
 import dev.imhamid.messages.util.LinkToken
 import dev.imhamid.messages.util.Smart
@@ -160,6 +164,9 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
     var showSchedule by remember { mutableStateOf(false) }
     var contactChoice by remember { mutableStateOf<Pair<String, List<String>>?>(null) }
     val listState = rememberLazyListState()
+    val hazeState = remember { HazeState() }
+    val dens = LocalDensity.current
+    var composerH by remember { mutableStateOf(64.dp) }
 
     fun appendContact(name: String, number: String) {
         text = (if (text.isBlank()) "" else text.trimEnd() + "\n") + name + "\n" + number
@@ -196,7 +203,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
             topBar = {
-              Box(Modifier.statusBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp).glass(RoundedCornerShape(26.dp))) {
+              Box(Modifier.statusBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp).glass(RoundedCornerShape(26.dp), hazeState)) {
                 TopAppBar(
                     windowInsets = WindowInsets(0, 0, 0, 0),
                     navigationIcon = {
@@ -224,23 +231,23 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                             IconButton(onClick = { menuOpen = true }) {
                                 Icon(Icons.Default.MoreVert, stringResource(R.string.more))
                             }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(if (pinned) R.string.action_unpin else R.string.action_pin)) },
-                                    leadingIcon = { Icon(if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, null) },
+                            AppDropdown(expanded = menuOpen, onDismiss = { menuOpen = false }) {
+                                menuItem(
+                                    text = stringResource(if (pinned) R.string.action_unpin else R.string.action_pin),
+                                    icon = if (pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin,
                                     onClick = { menuOpen = false; vm.pin(listOf(key), !pinned) }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(if (isBlocked) R.string.action_unblock else R.string.action_block)) },
-                                    leadingIcon = { Icon(Icons.Default.Block, null) },
+                                menuItem(
+                                    text = stringResource(if (isBlocked) R.string.action_unblock else R.string.action_block),
+                                    icon = Icons.Default.Block,
                                     onClick = {
                                         menuOpen = false
                                         if (isBlocked) vm.unblock(key) else askBlock = true
                                     }
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.delete_chat_menu)) },
-                                    leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                menuItem(
+                                    text = stringResource(R.string.delete_chat_menu),
+                                    icon = Icons.Default.Delete, danger = true,
                                     onClick = { menuOpen = false; askDeleteChat = true }
                                 )
                             }
@@ -251,10 +258,10 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
               }
             }
         ) { pad ->
-            Column(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
+            Box(Modifier.fillMaxSize().padding(bottom = pad.calculateBottomPadding())) {
                 LazyColumn(
-                    Modifier.weight(1f).fillMaxWidth(), state = listState, reverseLayout = true,
-                    contentPadding = PaddingValues(top = pad.calculateTopPadding() + 4.dp, bottom = 4.dp)
+                    Modifier.fillMaxSize().haze(hazeState), state = listState, reverseLayout = true,
+                    contentPadding = PaddingValues(top = pad.calculateTopPadding() + 4.dp, bottom = composerH + 4.dp)
                 ) {
                     itemsIndexed(messages, key = { _, m -> m.id }) { i, m ->
                         val older = messages.getOrNull(i + 1)
@@ -292,6 +299,8 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                     }
                 }
                 Composer(
+                    modifier = Modifier.align(Alignment.BottomCenter).onSizeChanged { composerH = with(dens) { it.height.toDp() } },
+                    haze = hazeState,
                     text = text,
                     onText = { text = it },
                     sims = sims,
@@ -448,13 +457,14 @@ private fun tokenAt(
 private fun openToken(ctx: Context, t: LinkToken) {
     val intent = if (t.kind == LinkKind.URL) {
         val u = if (t.value.contains("://")) t.value else "https://" + t.value
-        Intent(Intent.ACTION_VIEW, Uri.parse(u))
+        Intent(Intent.ACTION_VIEW, Uri.parse(u)).addCategory(Intent.CATEGORY_BROWSABLE)
     } else {
         Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(t.value)))
     }
     try {
         ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: Exception) {
+        Toast.makeText(ctx, ctx.getString(R.string.link_open_failed), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -523,9 +533,16 @@ private fun Bubble(
         }
     }
     // Consecutive messages from the same side (within 5 minutes) form a visual group.
-    val big = 18.dp
-    val sideTop = if (groupedOlder) 5.dp else big
-    val sideBottom = if (groupedNewer) 5.dp else 4.dp
+    val big = 20.dp
+    val join = 4.dp
+    val sideTop by animateDpAsState(
+        if (groupedOlder) join else big, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "corner-top"
+    )
+    val sideBottom by animateDpAsState(
+        if (groupedNewer) join else big, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "corner-bottom"
+    )
+    // Only the last bubble of a run shows time/status, so a run reads as one block.
+    val showMeta = !groupedNewer || m.type == TYPE_FAILED || m.type == TYPE_SENDING
     val shape = if (out) RoundedCornerShape(big, sideTop, sideBottom, big) else RoundedCornerShape(sideTop, big, big, sideBottom)
     val useGradient = out && grad != null
     val container = when {
@@ -552,7 +569,7 @@ private fun Bubble(
 
     Row(
         Modifier.fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = if (groupedOlder) 1.dp else 6.dp, bottom = 1.dp)
+            .padding(start = 12.dp, end = 12.dp, top = if (groupedOlder) 2.dp else 10.dp, bottom = 0.dp)
             .graphicsLayer {
                 alpha = appear.value.coerceIn(0f, 1f)
                 val sc = 0.85f + 0.15f * appear.value
@@ -581,11 +598,15 @@ private fun Bubble(
                                 },
                                 onTap = { pos ->
                                     val t = tokenAt(pos, boxCoords, textCoords, textLayout, m.body, tokens)
-                                    if (t != null) linkTarget = t else menu = true
+                                    if (t != null) openToken(ctx, t) else menu = true
                                 },
                                 onLongPress = { pos ->
+                                    val lt = tokenAt(pos, boxCoords, textCoords, textLayout, m.body, tokens)
                                     val r = numberAt(pos, boxCoords, textCoords, textLayout, m.body)
-                                    if (r != null) {
+                                    if (lt != null && lt.kind == LinkKind.URL) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        linkTarget = lt
+                                    } else if (r != null) {
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         numberSel = r
                                         onSelectText()
@@ -597,7 +618,7 @@ private fun Bubble(
                         }
                     )
             ) {
-                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp).animateContentSize()) {
+                Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = if (showMeta) 6.dp else 8.dp).animateContentSize()) {
                     if (selecting) SelectableBody(m.body, content, out, numberSel) { numberSel = null; onSelectDone() }
                     else Text(
                         annotated,
@@ -621,7 +642,7 @@ private fun Bubble(
                             Text(stringResource(R.string.copy_code, code), style = MaterialTheme.typography.labelMedium)
                         }
                     }
-                    Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+                    if (showMeta) Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                         if (m.type == TYPE_FAILED) {
                             Icon(Icons.Default.ErrorOutline, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.error)
                             Text(
@@ -646,17 +667,16 @@ private fun Bubble(
                     }
                 }
             }
-            DropdownMenu(expanded = linkTarget != null, onDismissRequest = { linkTarget = null }) {
+            AppDropdown(expanded = linkTarget != null, onDismiss = { linkTarget = null }, alignEnd = out) {
                 val t = linkTarget
                 if (t != null) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(if (t.kind == LinkKind.URL) R.string.link_open else R.string.link_call)) },
-                        leadingIcon = { Icon(if (t.kind == LinkKind.URL) Icons.Default.OpenInBrowser else Icons.Default.Call, null) },
+                    menuItem(
+                        text = stringResource(if (t.kind == LinkKind.URL) R.string.link_open else R.string.link_call),
+                        icon = if (t.kind == LinkKind.URL) Icons.Default.OpenInBrowser else Icons.Default.Call,
                         onClick = { linkTarget = null; openToken(ctx, t) }
                     )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.link_copy)) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                    menuItem(
+                        text = stringResource(R.string.link_copy), icon = Icons.Default.ContentCopy,
                         onClick = {
                             linkTarget = null
                             clipboard.setText(AnnotatedString(t.value))
@@ -665,27 +685,20 @@ private fun Bubble(
                     )
                 }
             }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_copy)) },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
-                    onClick = { menu = false; onCopy() }
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_select_text)) },
-                    leadingIcon = { Icon(Icons.Default.SelectAll, null) },
+            AppDropdown(expanded = menu, onDismiss = { menu = false }, alignEnd = out) {
+                menuItem(text = stringResource(R.string.action_copy), icon = Icons.Default.ContentCopy, onClick = { menu = false; onCopy() })
+                menuItem(
+                    text = stringResource(R.string.action_select_text), icon = Icons.Default.SelectAll,
                     onClick = { menu = false; numberSel = null; onSelectText() }
                 )
                 if (m.type == TYPE_FAILED) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_resend)) },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.Send, null) },
+                    menuItem(
+                        text = stringResource(R.string.action_resend), icon = Icons.AutoMirrored.Filled.Send,
                         onClick = { menu = false; onResend() }
                     )
                 }
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.action_delete)) },
-                    leadingIcon = { Icon(Icons.Default.Delete, null) },
+                menuItem(
+                    text = stringResource(R.string.action_delete), icon = Icons.Default.Delete, danger = true,
                     onClick = { menu = false; onDelete() }
                 )
             }
@@ -695,6 +708,8 @@ private fun Bubble(
 
 @Composable
 private fun Composer(
+    modifier: Modifier = Modifier,
+    haze: HazeState? = null,
     text: String,
     onText: (String) -> Unit,
     sims: List<SimInfo>,
@@ -728,7 +743,7 @@ private fun Composer(
     val pillSrc = remember { MutableInteractionSource() }
 
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+        modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Bottom
     ) {
         Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
@@ -737,7 +752,7 @@ private fun Composer(
             }
         }
         Surface(
-            modifier = Modifier.weight(1f).animateContentSize().glass(RoundedCornerShape(26.dp)),
+            modifier = Modifier.weight(1f).animateContentSize().glass(RoundedCornerShape(26.dp), haze),
             shape = RoundedCornerShape(26.dp),
             color = Color.Transparent
         ) {
@@ -845,17 +860,16 @@ private fun SimChip(sims: List<SimInfo>, effectiveSub: Int, chatSimSet: Boolean,
                 }
             }
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.sim_default_option)) },
-                onClick = { open = false; onPick(null) },
-                trailingIcon = { if (!chatSimSet) Icon(Icons.Default.Check, null) }
+        AppDropdown(expanded = open, onDismiss = { open = false }, alignEnd = false) {
+            menuItem(
+                text = stringResource(R.string.sim_default_option), icon = Icons.Default.SimCard, checked = !chatSimSet,
+                onClick = { open = false; onPick(null) }
             )
             sims.forEach { s ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sim_label, s.slot) + " · " + s.name) },
-                    onClick = { open = false; onPick(s.subId) },
-                    trailingIcon = { if (chatSimSet && s.subId == effectiveSub) Icon(Icons.Default.Check, null) }
+                menuItem(
+                    text = stringResource(R.string.sim_label, s.slot) + " · " + s.name, icon = Icons.Default.SimCard,
+                    checked = chatSimSet && s.subId == effectiveSub,
+                    onClick = { open = false; onPick(s.subId) }
                 )
             }
         }
