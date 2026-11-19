@@ -145,4 +145,5 @@
     <string name="font_xlarge">خیلی بزرگ</string>
     <string name="settings_material_you">رنگ‌های Material You</string>
     <string name="material_you_hint">استفاده از رنگ‌های والپیپر گوشی</string>
+    <string name="link_open_failed">باز کردن لینک ممکن نشد</string>
 </resources>

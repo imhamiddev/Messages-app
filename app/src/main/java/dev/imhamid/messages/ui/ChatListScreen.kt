@@ -1,5 +1,9 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -172,23 +176,11 @@ fun ChatListScreen(
                                 IconButton(onClick = { menuOpen = true }) {
                                     Icon(Icons.Default.MoreVert, stringResource(R.string.more))
                                 }
-                                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.menu_scheduled)) },
-                                        onClick = { menuOpen = false; onScheduled() }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.menu_trash)) },
-                                        onClick = { menuOpen = false; onTrash() }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.menu_blocked)) },
-                                        onClick = { menuOpen = false; onBlocked() }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.menu_settings)) },
-                                        onClick = { menuOpen = false; onSettings() }
-                                    )
+                                AppDropdown(expanded = menuOpen, onDismiss = { menuOpen = false }) {
+                                    menuItem(text = stringResource(R.string.menu_scheduled), icon = Icons.Default.Schedule, onClick = { menuOpen = false; onScheduled() })
+                                    menuItem(text = stringResource(R.string.menu_trash), icon = Icons.Default.Delete, onClick = { menuOpen = false; onTrash() })
+                                    menuItem(text = stringResource(R.string.menu_blocked), icon = Icons.Default.Block, onClick = { menuOpen = false; onBlocked() })
+                                    menuItem(text = stringResource(R.string.menu_settings), icon = Icons.Default.Settings, onClick = { menuOpen = false; onSettings() })
                                 }
                             }
                         },

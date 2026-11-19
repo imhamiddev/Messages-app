@@ -63,10 +63,9 @@ fun TrashScreen(vm: MainViewModel, onBack: () -> Unit) {
                 if (items.isNotEmpty()) {
                     Box {
                         IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.more)) }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.empty_trash)) },
-                                leadingIcon = { Icon(Icons.Default.DeleteForever, null) },
+                        AppDropdown(expanded = menu, onDismiss = { menu = false }) {
+                            menuItem(
+                                text = stringResource(R.string.empty_trash), icon = Icons.Default.DeleteForever, danger = true,
                                 onClick = { menu = false; askEmpty = true }
                             )
                         }

@@ -1,5 +1,63 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeChild
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.animation.AnimatedContent
@@ -301,16 +359,145 @@ fun Swatch(selected: Boolean, brush: Brush?, onClick: () -> Unit) {
     }
 }
 
-/** Frosted-glass surface: translucent tint, soft highlight and a thin light border. */
+/**
+ * Real frosted glass: the content behind the surface (marked with `Modifier.haze(state)`) is blurred and
+ * lightly tinted with one flat colour, plus a thin flat rim. No gradients. Without a [haze] state (or where
+ * blur is unsupported) it falls back to a flat, mostly opaque surface.
+ */
 @Composable
-fun Modifier.glass(shape: Shape): Modifier {
-    val tint = MaterialTheme.colorScheme.surface
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val sheen = if (dark) 0.10f else 0.35f
-    val rim = if (dark) 0.16f else 0.7f
-    return this
-        .clip(shape)
-        .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.78f), tint.copy(alpha = 0.58f))))
-        .background(Brush.linearGradient(listOf(Color.White.copy(alpha = sheen), Color.Transparent)))
-        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = rim), Color.White.copy(alpha = 0.06f))), shape)
+fun Modifier.glass(shape: Shape, haze: HazeState? = null): Modifier {
+    val scheme = MaterialTheme.colorScheme
+    val dark = scheme.background.luminance() < 0.5f
+    val rim = if (dark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.08f)
+    val base = this.clip(shape)
+    val filled = if (haze != null) {
+        val style = HazeStyle(
+            backgroundColor = scheme.surface,
+            tints = listOf(HazeTint(scheme.surface.copy(alpha = if (dark) 0.50f else 0.55f))),
+            blurRadius = 24.dp,
+            noiseFactor = 0.03f,
+            fallbackTint = HazeTint(scheme.surface.copy(alpha = 0.90f))
+        )
+        base.hazeChild(haze, style)
+    } else {
+        base.background(scheme.surface.copy(alpha = 0.90f))
+    }
+    return filled.border(1.dp, rim, shape)
+}
+
+class MenuScope(col: ColumnScope) : ColumnScope by col {
+    internal var count = 0
+}
+
+/**
+ * Styled replacement for the stock DropdownMenu: scales/fades out of the anchor corner, flips above the
+ * anchor when there is no room below, and its items stagger in. Put it inside a Box next to the anchor.
+ */
+@Composable
+fun AppDropdown(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    alignEnd: Boolean = true,
+    content: @Composable MenuScope.() -> Unit
+) {
+    val visible = remember { MutableTransitionState(false) }
+    visible.targetState = expanded
+    if (visible.currentState || visible.targetState) {
+        var up by remember { mutableStateOf(false) }
+        val pad = 12.dp
+        val padPx = with(LocalDensity.current) { pad.roundToPx() }
+        val gapPx = with(LocalDensity.current) { 4.dp.roundToPx() }
+        val rightAligned = alignEnd == (LocalLayoutDirection.current == LayoutDirection.Ltr)
+        val provider = remember(rightAligned, padPx, gapPx) {
+            object : PopupPositionProvider {
+                override fun calculatePosition(
+                    anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize
+                ): IntOffset {
+                    val x0 = if (rightAligned) anchorBounds.right - popupContentSize.width + padPx else anchorBounds.left - padPx
+                    val x = x0.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+                    val below = anchorBounds.bottom - padPx + gapPx
+                    val above = anchorBounds.top - popupContentSize.height + padPx - gapPx
+                    val goUp = below + popupContentSize.height > windowSize.height && above >= 0
+                    if (goUp != up) up = goUp
+                    val y = if (goUp) above else below.coerceAtMost(windowSize.height - popupContentSize.height).coerceAtLeast(0)
+                    return IntOffset(x, y)
+                }
+            }
+        }
+        Popup(popupPositionProvider = provider, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
+            val origin = TransformOrigin(if (rightAligned) 1f else 0f, if (up) 1f else 0f)
+            AnimatedVisibility(
+                visibleState = visible,
+                enter = fadeIn(tween(120)) + scaleIn(spring(dampingRatio = 0.72f, stiffness = 520f), initialScale = 0.7f, transformOrigin = origin),
+                exit = fadeOut(tween(90)) + scaleOut(tween(110), targetScale = 0.9f, transformOrigin = origin)
+            ) {
+                Box(Modifier.padding(pad)) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = 3.dp,
+                        shadowElevation = 12.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Column(Modifier.width(IntrinsicSize.Max).widthIn(min = 176.dp).padding(6.dp)) {
+                            MenuScope(this).content()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MenuScope.menuItem(
+    text: String,
+    icon: ImageVector? = null,
+    danger: Boolean = false,
+    checked: Boolean = false,
+    onClick: () -> Unit
+) {
+    val idx = remember { count++ }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(idx * 28L)
+        appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 380f))
+    }
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val bg by animateColorAsState(
+        if (pressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
+        tween(120), label = "menu-item-bg"
+    )
+    val iconScale by animateFloatAsState(
+        if (pressed) 1.2f else 1f, spring(dampingRatio = 0.45f, stiffness = 500f), label = "menu-item-icon"
+    )
+    val fg = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier.fillMaxWidth()
+            .graphicsLayer {
+                alpha = appear.value
+                translationY = (1f - appear.value) * 14f
+            }
+            .pressScale(src, 0.97f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(interactionSource = src, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                icon, null,
+                Modifier.size(20.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale },
+                tint = if (danger) fg else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = fg)
+        if (checked) {
+            Spacer(Modifier.width(12.dp))
+            Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        }
+    }
 }
