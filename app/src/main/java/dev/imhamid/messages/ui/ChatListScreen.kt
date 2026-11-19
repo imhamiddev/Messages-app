@@ -198,13 +198,13 @@ fun ChatListScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = onNew,
-                    expanded = fabExpanded,
+                    expanded = false,
                     interactionSource = src,
                     shape = fabShape,
                     elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                     modifier = Modifier.pressScale(src).shadow(8.dp, fabShape).clip(fabShape).background(accentBrush()),
-                    icon = { Icon(Icons.Default.Add, null, Modifier.graphicsLayer { rotationZ = rot }) },
-                    text = { Text(stringResource(R.string.new_chat)) },
+                    icon = { Icon(Icons.Default.Add, stringResource(R.string.new_chat), Modifier.graphicsLayer { rotationZ = rot }) },
+                    text = {},
                     containerColor = Color.Transparent,
                     contentColor = onAccent()
                 )

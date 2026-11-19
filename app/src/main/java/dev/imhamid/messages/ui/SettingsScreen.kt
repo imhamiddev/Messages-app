@@ -1,5 +1,7 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.OutlinedIconButton
 import android.Manifest
 import android.app.role.RoleManager
 import android.content.Context
@@ -78,9 +80,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
     val defaultSim by vm.defaultSim.collectAsStateWithLifecycle()
     val importing by vm.repo.importing.collectAsStateWithLifecycle()
     val imported by vm.repo.imported.collectAsStateWithLifecycle()
-    val accent by vm.accent.collectAsStateWithLifecycle()
-    val gradient by vm.gradient.collectAsStateWithLifecycle()
-    val wallpaper by vm.wallpaper.collectAsStateWithLifecycle()
+    val bubble by vm.bubble.collectAsStateWithLifecycle()
     val fa = rememberIsFa()
 
     var tick by remember { mutableIntStateOf(0) }
@@ -130,22 +130,11 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                     theme
                 ) { vm.settings.setTheme(it) }
             }
-            Section(stringResource(R.string.settings_accent), 3) {
+            Section(stringResource(R.string.settings_gradient), 3) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AccentColors.forEachIndexed { i, c -> Swatch(accent == i, SolidColor(c)) { vm.settings.setAccent(i) } }
-                }
-            }
-            Section(stringResource(R.string.settings_gradient), 4) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    BubbleGradients.forEachIndexed { i, g ->
-                        Swatch(gradient == i, g?.let { Brush.linearGradient(it) }) { vm.settings.setGradient(i) }
-                    }
-                }
-            }
-            Section(stringResource(R.string.settings_wallpaper), 5) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Wallpapers.forEachIndexed { i, g ->
-                        Swatch(wallpaper == i, g?.let { Brush.linearGradient(it) }) { vm.settings.setWallpaper(i) }
+                    BubbleStyles.forEachIndexed { i, colors ->
+                        val brush = if (colors.size > 1) Brush.linearGradient(colors) else SolidColor(colors.first())
+                        Swatch(bubble == i, brush) { vm.settings.setBubble(i) }
                     }
                 }
             }
@@ -156,8 +145,8 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { phoneLauncher.launch(Manifest.permission.READ_PHONE_STATE) }) {
-                        Text(stringResource(R.string.action_allow))
+                    OutlinedIconButton(onClick = { phoneLauncher.launch(Manifest.permission.READ_PHONE_STATE) }) {
+                        Icon(Icons.Default.Check, stringResource(R.string.action_allow))
                     }
                 } else {
                     SimOption(stringResource(R.string.sim_system_default), defaultSim < 0) { vm.settings.setDefaultSim(-1) }
@@ -188,8 +177,8 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = { vm.runImport() }, enabled = !importing) {
-                        Text(stringResource(R.string.import_now))
+                    OutlinedIconButton(onClick = { vm.runImport() }, enabled = !importing) {
+                        Icon(Icons.Default.Download, stringResource(R.string.import_now))
                     }
                     if (importing) {
                         Text(stringResource(R.string.importing, imported), style = MaterialTheme.typography.bodyMedium)

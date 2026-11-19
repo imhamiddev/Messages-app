@@ -26,9 +26,7 @@ class MainActivity : AppCompatActivity() {
         handle(intent)
         setContent {
             val theme by app.settings.theme.collectAsStateWithLifecycle()
-            val accent by app.settings.accent.collectAsStateWithLifecycle()
-            val gradient by app.settings.gradient.collectAsStateWithLifecycle()
-            val wallpaper by app.settings.wallpaper.collectAsStateWithLifecycle()
+            val bubble by app.settings.bubble.collectAsStateWithLifecycle()
             val dark = when (theme) {
                 1 -> false
                 2 -> true
@@ -43,7 +41,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 onDispose { }
             }
-            MessagesTheme(dark, accent, gradient, wallpaper) {
+            MessagesTheme(dark, bubble) {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     AppRoot(launchAddress = launchAddress, onLaunchConsumed = { launchAddress = null })
                 }

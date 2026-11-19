@@ -1,6 +1,7 @@
 package dev.imhamid.messages
 
 import android.content.Context
+import dev.imhamid.messages.ui.SOLID_STYLE_COUNT
 import dev.imhamid.messages.util.CalendarType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,16 +22,17 @@ class SettingsStore(ctx: Context) {
     private val _theme = MutableStateFlow(sp.getInt("theme", 0))
     val theme: StateFlow<Int> = _theme
 
-    private val _accent = MutableStateFlow(sp.getInt("accent", 0))
-    val accent: StateFlow<Int> = _accent
-    private val _gradient = MutableStateFlow(sp.getInt("gradient", 0))
-    val gradient: StateFlow<Int> = _gradient
-    private val _wallpaper = MutableStateFlow(sp.getInt("wallpaper", 0))
-    val wallpaper: StateFlow<Int> = _wallpaper
+    /** Index into BubbleStyles. The old separate accent / gradient settings are migrated once. */
+    private val _bubble = MutableStateFlow(
+        if (sp.contains("bubble")) sp.getInt("bubble", 0)
+        else {
+            val g = sp.getInt("gradient", 0)
+            if (g > 0) SOLID_STYLE_COUNT + g - 1 else sp.getInt("accent", 0)
+        }
+    )
+    val bubble: StateFlow<Int> = _bubble
 
-    fun setAccent(i: Int) { _accent.value = i; sp.edit().putInt("accent", i).apply() }
-    fun setGradient(i: Int) { _gradient.value = i; sp.edit().putInt("gradient", i).apply() }
-    fun setWallpaper(i: Int) { _wallpaper.value = i; sp.edit().putInt("wallpaper", i).apply() }
+    fun setBubble(i: Int) { _bubble.value = i; sp.edit().putInt("bubble", i).apply() }
 
     /** True once the user has answered the "make default SMS app" prompt (accepted or skipped). */
     var defaultPromptDismissed: Boolean

@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import android.provider.Telephony
+import androidx.core.app.RemoteInput
 import dev.imhamid.messages.app
 import dev.imhamid.messages.data.TYPE_FAILED
 import dev.imhamid.messages.data.TYPE_SENT
@@ -80,5 +81,39 @@ class ScheduledSendReceiver : BroadcastReceiver() {
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         runAsync { Scheduler.rearmAll(context) }
+    }
+}
+
+/** Handles the Reply and Delete buttons of an incoming-message notification. */
+class NotificationActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val key = intent.getStringExtra(Notifier.EXTRA_KEY) ?: return
+        val address = intent.getStringExtra(Notifier.EXTRA_ADDRESS) ?: return
+        when (intent.action) {
+            Notifier.ACTION_REPLY -> {
+                val text = RemoteInput.getResultsFromIntent(intent)
+                    ?.getCharSequence(Notifier.KEY_REPLY)?.toString()?.trim().orEmpty()
+                if (text.isEmpty()) {
+                    Notifier.cancel(context, key)
+                    return
+                }
+                val sub = intent.getIntExtra(Notifier.EXTRA_SUB, -1)
+                runAsync {
+                    val repo = context.app.repo
+                    SmsSender.send(context, address, text, repo.chatSim(key) ?: sub)
+                    repo.markRead(key)
+                    Notifier.cancel(context, key)
+                }
+            }
+            Notifier.ACTION_DELETE -> {
+                val id = intent.getLongExtra(Notifier.EXTRA_MSG_ID, -1)
+                runAsync {
+                    val repo = context.app.repo
+                    if (id >= 0) repo.trashMessages(listOf(id))
+                    repo.markRead(key)
+                    Notifier.cancel(context, key)
+                }
+            }
+        }
     }
 }

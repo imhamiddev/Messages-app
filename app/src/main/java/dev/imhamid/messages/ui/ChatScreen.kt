@@ -1,5 +1,13 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.gestures.detectTapGestures
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -147,7 +155,6 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Scaffold(
-            modifier = Modifier.wallpaper(),
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.ime),
             topBar = {
@@ -306,9 +313,9 @@ private fun DayHeader(label: String) {
 
 /** Read-only text field that starts with the whole message selected, so the system toolbar offers Copy. */
 @Composable
-private fun SelectableBody(text: String, color: Color, onDone: () -> Unit) {
+private fun SelectableBody(text: String, color: Color, initial: TextRange?, onDone: () -> Unit) {
     val focus = remember { FocusRequester() }
-    var value by remember { mutableStateOf(TextFieldValue(text, TextRange(0, text.length))) }
+    var value by remember { mutableStateOf(TextFieldValue(text, initial ?: TextRange(0, text.length))) }
     var hadFocus by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { focus.requestFocus() }
     BackHandler { onDone() }
@@ -316,12 +323,32 @@ private fun SelectableBody(text: String, color: Color, onDone: () -> Unit) {
         value = value,
         onValueChange = { value = it },
         readOnly = true,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = color),
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = color, textDirection = TextDirection.Content),
         cursorBrush = SolidColor(Color.Transparent),
         modifier = Modifier.focusRequester(focus).onFocusChanged {
             if (it.isFocused) hadFocus = true else if (hadFocus) onDone()
         }
     )
+}
+
+private val digitRun = Regex("[0-9\\u0660-\\u0669\\u06F0-\\u06F9]+")
+
+/** The run of digits (Latin, Arabic-Indic or Persian) under a touch point in the bubble text, or null. */
+private fun numberAt(
+    pos: Offset,
+    box: LayoutCoordinates?,
+    textCoords: LayoutCoordinates?,
+    layout: TextLayoutResult?,
+    body: String
+): TextRange? {
+    if (box == null || textCoords == null || layout == null || !box.isAttached || !textCoords.isAttached) return null
+    val local = textCoords.localPositionOf(box, pos)
+    if (local.x < -16f || local.y < -8f || local.x > layout.size.width + 16f || local.y > layout.size.height + 8f) return null
+    val off = layout.getOffsetForPosition(local).coerceIn(0, body.length)
+    for (m in digitRun.findAll(body)) {
+        if (off >= m.range.first && off <= m.range.last + 1) return TextRange(m.range.first, m.range.last + 1)
+    }
+    return null
 }
 
 @Composable
@@ -340,7 +367,12 @@ private fun Bubble(
     val out = !m.incoming
     val grad = LocalGradient.current
     val src = remember { MutableInteractionSource() }
+    val haptics = LocalHapticFeedback.current
     var menu by remember { mutableStateOf(false) }
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var textCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var boxCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var numberSel by remember { mutableStateOf<TextRange?>(null) }
     val appear = remember { Animatable(if (animateIn) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (animateIn) {
@@ -379,11 +411,39 @@ private fun Bubble(
                 color = container,
                 contentColor = content,
                 modifier = Modifier.widthIn(max = 300.dp).pressScale(src, 0.97f).then(bgMod).clip(shape)
-                    .clickable(interactionSource = src, indication = null) { if (!selecting) menu = true }
+                    .onGloballyPositioned { boxCoords = it }
+                    .then(
+                        if (selecting) Modifier else Modifier.pointerInput(m.id) {
+                            detectTapGestures(
+                                onPress = {
+                                    val press = PressInteraction.Press(it)
+                                    src.emit(press)
+                                    val released = tryAwaitRelease()
+                                    src.emit(if (released) PressInteraction.Release(press) else PressInteraction.Cancel(press))
+                                },
+                                onTap = { menu = true },
+                                onLongPress = { pos ->
+                                    val r = numberAt(pos, boxCoords, textCoords, textLayout, m.body)
+                                    if (r != null) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        numberSel = r
+                                        onSelectText()
+                                    } else {
+                                        menu = true
+                                    }
+                                }
+                            )
+                        }
+                    )
             ) {
                 Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp).animateContentSize()) {
-                    if (selecting) SelectableBody(m.body, content, onSelectDone)
-                    else Text(m.body, style = MaterialTheme.typography.bodyLarge)
+                    if (selecting) SelectableBody(m.body, content, numberSel) { numberSel = null; onSelectDone() }
+                    else Text(
+                        m.body,
+                        modifier = Modifier.onGloballyPositioned { textCoords = it },
+                        style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
+                        onTextLayout = { textLayout = it }
+                    )
                     Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                         if (m.type == TYPE_FAILED) {
                             Icon(Icons.Default.ErrorOutline, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.error)
@@ -418,7 +478,7 @@ private fun Bubble(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_select_text)) },
                     leadingIcon = { Icon(Icons.Default.SelectAll, null) },
-                    onClick = { menu = false; onSelectText() }
+                    onClick = { menu = false; numberSel = null; onSelectText() }
                 )
                 if (m.type == TYPE_FAILED) {
                     DropdownMenuItem(
@@ -490,7 +550,11 @@ private fun Composer(
                     BasicTextField(
                         value = text, onValueChange = onText,
                         modifier = Modifier.fillMaxWidth(),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textDirection = TextDirection.Content,
+                            textAlign = TextAlign.Start
+                        ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         maxLines = 6,
                         decorationBox = { inner ->

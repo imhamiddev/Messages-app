@@ -1,7 +1,6 @@
 package dev.imhamid.messages.ui
 
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
@@ -11,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -94,7 +92,6 @@ private val AppShapes = Shapes(
 )
 
 val LocalGradient = staticCompositionLocalOf<List<Color>?> { null }
-val LocalWallpaper = staticCompositionLocalOf<List<Color>?> { null }
 
 /** Brush for primary surfaces: the chosen gradient, or the plain accent colour. */
 @Composable
@@ -104,14 +101,6 @@ fun accentBrush(): Brush =
 /** Content colour that is readable on [accentBrush]. */
 @Composable
 fun onAccent(): Color = if (LocalGradient.current != null) Color.White else MaterialTheme.colorScheme.onPrimary
-
-@Composable
-fun Modifier.wallpaper(): Modifier {
-    val w = LocalWallpaper.current ?: return this
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val a = if (dark) 0.16f else 0.32f
-    return this.background(Brush.linearGradient(w.map { it.copy(alpha = a) }))
-}
 
 private fun schemeFor(dark: Boolean, c: Color): ColorScheme {
     val base = if (dark) DarkColors else LightColors
@@ -138,13 +127,12 @@ private fun schemeFor(dark: Boolean, c: Color): ColorScheme {
 }
 
 @Composable
-fun MessagesTheme(dark: Boolean, accent: Int, gradient: Int, wallpaper: Int, content: @Composable () -> Unit) {
-    val c = AccentColors[accent.coerceIn(0, AccentColors.lastIndex)]
-    val scheme = remember(dark, accent) { schemeFor(dark, c) }
-    CompositionLocalProvider(
-        LocalGradient provides BubbleGradients.getOrNull(gradient),
-        LocalWallpaper provides Wallpapers.getOrNull(wallpaper)
-    ) {
+fun MessagesTheme(dark: Boolean, bubble: Int, content: @Composable () -> Unit) {
+    val style = BubbleStyles[bubble.coerceIn(0, BubbleStyles.lastIndex)]
+    // The accent follows the bubble colour (middle of the gradient for two-colour styles).
+    val c = if (style.size > 1) lerp(style.first(), style.last(), 0.5f) else style.first()
+    val scheme = remember(dark, bubble) { schemeFor(dark, c) }
+    CompositionLocalProvider(LocalGradient provides style.takeIf { it.size > 1 }) {
         MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes, content = content)
     }
 }
