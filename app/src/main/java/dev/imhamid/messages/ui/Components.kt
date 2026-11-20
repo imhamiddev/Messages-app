@@ -9,7 +9,6 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableFloatStateOf

@@ -1,5 +1,6 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
