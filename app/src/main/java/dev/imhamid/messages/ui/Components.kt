@@ -1,5 +1,29 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package dev.imhamid.messages.ui
 
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
@@ -127,7 +151,7 @@ private val AvatarPalette = listOf(0xFF5B5FEF, 0xFF0EA5A4, 0xFFE0662F, 0xFFC2417
 
 /** Round avatar: contact photo when available, otherwise a gradient with the initial. */
 @Composable
-fun Avatar(title: String, isContact: Boolean, size: Dp = 48.dp, selected: Boolean = false, address: String? = null) {
+fun Avatar(title: String, isContact: Boolean, size: Dp = 48.dp, selected: Boolean = false, address: String? = null, sharedKey: String? = null) {
     val ctx = LocalContext.current
     val photo by produceState<ImageBitmap?>(null, address) {
         value = if (address != null) ctx.app.repo.contacts.photoFor(address) else null
@@ -140,8 +164,12 @@ fun Avatar(title: String, isContact: Boolean, size: Dp = 48.dp, selected: Boolea
         photo != null -> 1
         else -> 2
     }
+    val shared = LocalShared.current
+    val sharedMod = if (sharedKey != null && shared != null) {
+        with(shared.first) { Modifier.sharedElement(rememberSharedContentState("avatar-$sharedKey"), shared.second) }
+    } else Modifier
     Box(
-        Modifier.size(size).clip(CircleShape).background(brush),
+        Modifier.size(size).then(sharedMod).clip(CircleShape).background(brush),
         contentAlignment = Alignment.Center
     ) {
         AnimatedContent(
@@ -463,5 +491,181 @@ fun MenuScope.menuItem(
             Spacer(Modifier.width(12.dp))
             Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         }
+    }
+}
+
+
+/** Scopes handed down by the nav host so avatars can fly between the list and the chat. */
+val LocalShared = compositionLocalOf<Pair<SharedTransitionScope, AnimatedVisibilityScope>?> { null }
+
+@Composable
+fun HapticSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    Switch(checked = checked, onCheckedChange = {
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onCheckedChange(it)
+    })
+}
+
+// ---------------------------------------------------------------- shimmer skeletons
+
+@Composable
+fun Modifier.shimmer(): Modifier {
+    val t = rememberInfiniteTransition(label = "shimmer")
+    val x by t.animateFloat(
+        initialValue = -1f, targetValue = 2f,
+        animationSpec = infiniteRepeatable(tween(1300, easing = LinearEasing), RepeatMode.Restart), label = "shimmer-x"
+    )
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
+    val hi = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.35f).compositeOver(MaterialTheme.colorScheme.surface)
+    return this.drawBehind {
+        drawRect(
+            Brush.linearGradient(
+                listOf(base, hi, base),
+                start = Offset(size.width * x, 0f), end = Offset(size.width * (x + 0.6f), size.height * 0.2f)
+            )
+        )
+    }
+}
+
+@Composable
+fun SkeletonRow(avatar: Boolean = true) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (avatar) {
+            Box(Modifier.size(48.dp).clip(CircleShape).shimmer())
+            Spacer(Modifier.width(14.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Box(Modifier.fillMaxWidth(0.42f).height(14.dp).clip(RoundedCornerShape(7.dp)).shimmer())
+            Spacer(Modifier.height(9.dp))
+            Box(Modifier.fillMaxWidth(0.85f).height(12.dp).clip(RoundedCornerShape(6.dp)).shimmer())
+        }
+    }
+}
+
+@Composable
+fun SkeletonList(count: Int = 8, avatar: Boolean = true) {
+    Column(Modifier.fillMaxSize()) { repeat(count) { SkeletonRow(avatar) } }
+}
+
+// ---------------------------------------------------------------- swipe row
+
+class SwipeAction(val icon: ImageVector, val color: Color)
+
+private enum class SwipeTier { NONE, START, END, FAR }
+
+/**
+ * Swipe right = [start]; swipe left = [end] (partial) or [far] (long swipe). The action icon grows with the
+ * finger, bounces when the threshold is crossed (with a tick), then turns into a check mark on release.
+ */
+@Composable
+fun SwipeRow(
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    start: SwipeAction? = null, onStart: () -> Unit = {},
+    end: SwipeAction? = null, onEnd: () -> Unit = {},
+    far: SwipeAction? = null, onFar: () -> Unit = {},
+    content: @Composable () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val offset = remember { Animatable(0f) }
+    var width by remember { mutableFloatStateOf(1f) }
+    var done by remember { mutableStateOf(false) }
+    val tier by remember(start, end, far) {
+        derivedStateOf {
+            val o = offset.value
+            when {
+                start != null && o > width * 0.28f -> SwipeTier.START
+                far != null && o < -width * 0.62f -> SwipeTier.FAR
+                end != null && o < -width * 0.28f -> SwipeTier.END
+                else -> SwipeTier.NONE
+            }
+        }
+    }
+    LaunchedEffect(tier) { if (tier != SwipeTier.NONE) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+    val active: SwipeAction? = when (tier) {
+        SwipeTier.START -> start
+        SwipeTier.END -> end
+        SwipeTier.FAR -> far
+        SwipeTier.NONE -> if (offset.value > 0f) start else if (offset.value < 0f) end else null
+    }
+    val progress = (abs(offset.value) / (width * 0.28f)).coerceIn(0f, 1f)
+    val bg by animateColorAsState(
+        if (tier != SwipeTier.NONE && active != null) active.color else MaterialTheme.colorScheme.surfaceContainerHighest,
+        tween(160), label = "swipe-bg"
+    )
+    val iconScale by animateFloatAsState(
+        if (tier != SwipeTier.NONE) 1.3f else 0.5f + 0.5f * progress,
+        spring(dampingRatio = 0.45f, stiffness = 500f), label = "swipe-icon"
+    )
+
+    fun release() {
+        scope.launch {
+            when (tier) {
+                SwipeTier.START -> {
+                    done = true
+                    onStart()
+                    delay(380)
+                    offset.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 400f))
+                    done = false
+                }
+                SwipeTier.END, SwipeTier.FAR -> {
+                    val t = tier
+                    done = true
+                    delay(130)
+                    offset.animateTo(-width, tween(220))
+                    if (t == SwipeTier.FAR) onFar() else onEnd()
+                    delay(700)
+                    offset.snapTo(0f)
+                    done = false
+                }
+                SwipeTier.NONE -> offset.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
+            }
+        }
+    }
+
+    Box(modifier.fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.toFloat() }) {
+        if (offset.value != 0f) {
+            Box(
+                Modifier.matchParentSize().background(bg),
+                contentAlignment = if (offset.value > 0f) Alignment.CenterStart else Alignment.CenterEnd
+            ) {
+                val shown = if (done) Icons.Default.Check else active?.icon
+                if (shown != null) {
+                    AnimatedContent(
+                        targetState = shown,
+                        transitionSpec = {
+                            (scaleIn(spring(dampingRatio = 0.45f, stiffness = 500f), initialScale = 0.3f) + fadeIn(tween(100))) togetherWith
+                                (scaleOut(tween(90), targetScale = 0.3f) + fadeOut(tween(80)))
+                        },
+                        label = "swipe-icon-swap"
+                    ) { ic ->
+                        Icon(
+                            ic, null,
+                            Modifier.padding(horizontal = 26.dp).size(26.dp).graphicsLayer { scaleX = iconScale; scaleY = iconScale },
+                            tint = if (tier != SwipeTier.NONE) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+        Box(
+            Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.then(
+                if (!enabled) Modifier else Modifier.pointerInput(start, end, far) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { done = false },
+                        onDragEnd = { release() },
+                        onDragCancel = { scope.launch { offset.animateTo(0f, spring()) } },
+                        onHorizontalDrag = { change, dx ->
+                            change.consume()
+                            val lo = if (end != null || far != null) -width else 0f
+                            val hi = if (start != null) width * 0.5f else 0f
+                            scope.launch { offset.snapTo((offset.value + dx).coerceIn(lo, hi)) }
+                        }
+                    )
+                }
+            )
+        ) { content() }
     }
 }

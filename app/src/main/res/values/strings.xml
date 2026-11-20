@@ -146,4 +146,12 @@
     <string name="settings_material_you">Material You colors</string>
     <string name="material_you_hint">Use the colors of your wallpaper</string>
     <string name="link_open_failed">Couldn\'t open the link</string>
+    <string name="undo">Undo</string>
+    <string name="swipe_archived">Chat archived</string>
+    <string name="swipe_trashed">Moved to trash</string>
+    <string name="menu_archived">Archived</string>
+    <string name="archived_title">Archived</string>
+    <string name="archived_empty">No archived chats</string>
+    <string name="action_archive">Archive</string>
+    <string name="jump_latest">Jump to latest message</string>
 </resources>

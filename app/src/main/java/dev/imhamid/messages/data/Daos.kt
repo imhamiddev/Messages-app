@@ -55,6 +55,9 @@ interface MessageDao {
     @Query("UPDATE messages SET deletedAt = NULL WHERE id IN (:ids)")
     suspend fun restore(ids: List<Long>)
 
+    @Query("UPDATE messages SET deletedAt = NULL WHERE threadKey IN (:keys) AND deletedAt = :at")
+    suspend fun restoreThreads(keys: List<String>, at: Long)
+
     @Query("SELECT * FROM messages WHERE deletedAt IS NOT NULL AND deletedAt < 9223372036854775807 ORDER BY deletedAt DESC, date DESC")
     fun observeTrash(): Flow<List<MessageEntity>>
 

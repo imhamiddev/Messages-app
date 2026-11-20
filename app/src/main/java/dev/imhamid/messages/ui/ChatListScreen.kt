@@ -1,5 +1,14 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.lazy.items
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Block
@@ -100,7 +109,8 @@ fun ChatListScreen(
     onTrash: () -> Unit,
     onBlocked: () -> Unit,
     onScheduled: () -> Unit,
-    onSearch: () -> Unit
+    onSearch: () -> Unit,
+    onArchived: () -> Unit
 ) {
     val threads by vm.threads.collectAsStateWithLifecycle()
     val cal by vm.calendar.collectAsStateWithLifecycle()
@@ -113,7 +123,19 @@ fun ChatListScreen(
     val listState = rememberLazyListState()
     val fabExpanded by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
     var cat by remember { mutableStateOf<Category?>(null) }
-    val list = threads?.let { l -> if (cat == null) l else l.filter { it.category == cat } }
+    val list = threads?.filter { !it.archived }?.let { l -> if (cat == null) l else l.filter { it.category == cat } }
+    val snackbar = remember { SnackbarHostState() }
+    val uiScope = rememberCoroutineScope()
+    val undoLabel = stringResource(R.string.undo)
+    val archivedMsg = stringResource(R.string.swipe_archived)
+    val trashedMsg = stringResource(R.string.swipe_trashed)
+    fun undoable(msg: String, undo: () -> Unit) {
+        uiScope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar(msg, actionLabel = undoLabel, duration = SnackbarDuration.Short)
+            if (r == SnackbarResult.ActionPerformed) undo()
+        }
+    }
     var introDone by remember { mutableStateOf(false) }
     var fabVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -129,6 +151,7 @@ fun ChatListScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             AnimatedContent(
                 targetState = selected.isNotEmpty(),
@@ -157,6 +180,14 @@ fun ChatListScreen(
                                     Icon(Icons.Default.Block, stringResource(R.string.action_block))
                                 }
                             }
+                            IconButton(onClick = {
+                                val keys = selected.toList()
+                                vm.archive(keys, true)
+                                selected = emptySet()
+                                undoable(archivedMsg) { vm.archive(keys, false) }
+                            }) {
+                                Icon(Icons.Default.Archive, stringResource(R.string.action_archive))
+                            }
                             IconButton(onClick = { askDelete = true }) {
                                 Icon(Icons.Default.Delete, stringResource(R.string.action_delete))
                             }
@@ -176,6 +207,7 @@ fun ChatListScreen(
                                 }
                                 AppDropdown(expanded = menuOpen, onDismiss = { menuOpen = false }) {
                                     menuItem(text = stringResource(R.string.menu_scheduled), icon = Icons.Default.Schedule, onClick = { menuOpen = false; onScheduled() })
+                                    menuItem(text = stringResource(R.string.menu_archived), icon = Icons.Default.Archive, onClick = { menuOpen = false; onArchived() })
                                     menuItem(text = stringResource(R.string.menu_trash), icon = Icons.Default.Delete, onClick = { menuOpen = false; onTrash() })
                                     menuItem(text = stringResource(R.string.menu_blocked), icon = Icons.Default.Block, onClick = { menuOpen = false; onBlocked() })
                                     menuItem(text = stringResource(R.string.menu_settings), icon = Icons.Default.Settings, onClick = { menuOpen = false; onSettings() })
@@ -216,7 +248,7 @@ fun ChatListScreen(
         CategoryTabs(cat) { cat = it }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                list == null -> Unit
+                list == null -> SkeletonList()
                 list.isEmpty() -> EmptyState(
                     Icons.Default.ChatBubbleOutline,
                     stringResource(R.string.no_chats),
@@ -224,20 +256,39 @@ fun ChatListScreen(
                 )
                 else -> LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp)) {
                     itemsIndexed(list, key = { _, t -> t.key }) { index, t ->
-                        ChatRow(
+                        SwipeRow(
                             modifier = Modifier.animateItem().entrance(index, play = !introDone),
-                            t = t, cal = cal, fa = fa,
-                            selected = t.key in selected,
-                            onClick = {
-                                if (selected.isNotEmpty()) {
-                                    selected = if (t.key in selected) selected - t.key else selected + t.key
-                                } else onOpen(t.address)
+                            enabled = selected.isEmpty(),
+                            start = SwipeAction(if (t.pinned) Icons.Outlined.PushPin else Icons.Filled.PushPin, Color(0xFFF59E0B)),
+                            onStart = { vm.pin(listOf(t.key), !t.pinned) },
+                            end = SwipeAction(Icons.Default.Archive, Color(0xFF3B82F6)),
+                            onEnd = {
+                                vm.archive(listOf(t.key), true)
+                                undoable(archivedMsg) { vm.archive(listOf(t.key), false) }
                             },
-                            onLong = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                selected = if (t.key in selected) selected - t.key else selected + t.key
+                            far = SwipeAction(Icons.Default.Delete, MaterialTheme.colorScheme.error),
+                            onFar = {
+                                uiScope.launch {
+                                    val at = vm.trashThreadsAt(listOf(t.key))
+                                    undoable(trashedMsg) { vm.restoreThreads(listOf(t.key), at) }
+                                }
                             }
-                        )
+                        ) {
+                            ChatRow(
+                                modifier = Modifier,
+                                t = t, cal = cal, fa = fa,
+                                selected = t.key in selected,
+                                onClick = {
+                                    if (selected.isNotEmpty()) {
+                                        selected = if (t.key in selected) selected - t.key else selected + t.key
+                                    } else onOpen(t.address)
+                                },
+                                onLong = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    selected = if (t.key in selected) selected - t.key else selected + t.key
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -298,7 +349,7 @@ private fun ChatRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Avatar(title = t.title, isContact = t.name != null, selected = selected, address = t.address)
+        Avatar(title = t.title, isContact = t.name != null, selected = selected, address = t.address, sharedKey = t.key)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -384,6 +435,42 @@ private fun CategoryTabs(selected: Category?, onSelect: (Category?) -> Unit) {
                 selected = selected == c, onClick = { onSelect(c) },
                 label = { Text(stringResource(label)) }
             )
+        }
+    }
+}
+
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ArchivedScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Unit) {
+    val threads by vm.threads.collectAsStateWithLifecycle()
+    val cal by vm.calendar.collectAsStateWithLifecycle()
+    val fa = rememberIsFa()
+    val list = threads?.filter { it.archived }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = { AppTopBar(stringResource(R.string.archived_title), onBack) }
+    ) { pad ->
+        Box(Modifier.fillMaxSize().padding(pad)) {
+            when {
+                list == null -> SkeletonList()
+                list.isEmpty() -> EmptyState(Icons.Default.Archive, stringResource(R.string.archived_empty))
+                else -> LazyColumn {
+                    items(list, key = { it.key }) { t ->
+                        val unarchive = SwipeAction(Icons.Default.Unarchive, Color(0xFF3B82F6))
+                        SwipeRow(
+                            modifier = Modifier.animateItem(),
+                            start = unarchive, onStart = { vm.archive(listOf(t.key), false) },
+                            end = unarchive, onEnd = { vm.archive(listOf(t.key), false) }
+                        ) {
+                            ChatRow(
+                                modifier = Modifier, t = t, cal = cal, fa = fa, selected = false,
+                                onClick = { onOpen(t.address) }, onLong = {}
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

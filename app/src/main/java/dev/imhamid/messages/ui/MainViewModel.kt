@@ -30,7 +30,8 @@ data class ThreadItem(
     val last: MessageEntity,
     val unread: Int,
     val pinned: Boolean,
-    val pinnedAt: Long
+    val pinnedAt: Long,
+    val archived: Boolean = false
 ) {
     val category: dev.imhamid.messages.util.Category by lazy {
         dev.imhamid.messages.util.Smart.categorize(address, last.body, name != null)
@@ -63,7 +64,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ThreadItem(
                 key = m.threadKey, address = m.address, name = repo.contacts.nameFor(m.address),
                 last = m, unread = unreadMap[m.threadKey] ?: 0,
-                pinned = p?.pinned == true, pinnedAt = p?.pinnedAt ?: 0L
+                pinned = p?.pinned == true, pinnedAt = p?.pinnedAt ?: 0L,
+                archived = p?.archived == true
             )
         }.sortedWith(
             compareByDescending<ThreadItem> { it.pinned }
@@ -115,6 +117,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun trashThreads(keys: List<String>) {
         viewModelScope.launch { repo.trashThreads(keys) }
+    }
+
+    /** Trashes whole chats and returns the timestamp needed by [restoreThreads] to undo. */
+    suspend fun trashThreadsAt(keys: List<String>): Long = repo.trashThreads(keys)
+
+    fun restoreThreads(keys: List<String>, at: Long) {
+        viewModelScope.launch { repo.restoreThreads(keys, at) }
+    }
+
+    fun archive(keys: List<String>, archived: Boolean) {
+        viewModelScope.launch { repo.setArchived(keys, archived) }
     }
 
     fun trashMessages(ids: List<Long>) {

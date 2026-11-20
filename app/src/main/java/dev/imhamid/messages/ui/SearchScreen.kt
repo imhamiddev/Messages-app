@@ -1,5 +1,8 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,7 +72,7 @@ private fun highlight(body: String, q: String, fg: Color, bg: Color): AnnotatedS
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun SearchScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String, Long) -> Unit) {
     var q by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MessageEntity>>(emptyList()) }
     val cal by vm.calendar.collectAsStateWithLifecycle()
@@ -78,12 +81,16 @@ fun SearchScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Unit
     val term = q.trim()
 
     LaunchedEffect(Unit) { focus.requestFocus() }
+    var loading by remember { mutableStateOf(false) }
     LaunchedEffect(term) {
         if (term.length < 2) {
             results = emptyList()
+            loading = false
         } else {
+            loading = true
             delay(200)
             results = vm.search(term)
+            loading = false
         }
     }
 
@@ -126,12 +133,13 @@ fun SearchScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Unit
         Box(Modifier.fillMaxSize().padding(pad)) {
             when {
                 term.length < 2 -> EmptyState(Icons.Default.Search, stringResource(R.string.search_min))
+                loading && results.isEmpty() -> SkeletonList(count = 6, avatar = false)
                 results.isEmpty() -> EmptyState(Icons.Default.Search, stringResource(R.string.search_empty))
                 else -> LazyColumn {
                     items(results, key = { it.id }) { m ->
                         val name by produceState<String?>(null, m.address) { value = vm.displayName(m.address) }
                         Column(
-                            Modifier.fillMaxWidth().clickable { onOpen(m.address) }
+                            Modifier.fillMaxWidth().animateItem().clickable { onOpen(m.address, m.id) }
                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -145,12 +153,17 @@ fun SearchScreen(vm: MainViewModel, onBack: () -> Unit, onOpen: (String) -> Unit
                                     color = MaterialTheme.colorScheme.outline
                                 )
                             }
+                            var shown by remember { mutableStateOf(false) }
+                            LaunchedEffect(Unit) { shown = true }
+                            val hlBg by animateColorAsState(
+                                if (shown) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, tween(450), label = "hl-bg"
+                            )
+                            val hlFg by animateColorAsState(
+                                if (shown) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tween(450), label = "hl-fg"
+                            )
                             Text(
-                                highlight(
-                                    m.body, term,
-                                    MaterialTheme.colorScheme.onPrimaryContainer,
-                                    MaterialTheme.colorScheme.primaryContainer
-                                ),
+                                highlight(m.body, term, hlFg, hlBg),
                                 maxLines = 3, style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

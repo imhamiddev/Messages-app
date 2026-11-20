@@ -135,6 +135,7 @@ class Repository(
             val now = System.currentTimeMillis()
             val key = PhoneUtils.key(address)
             val isBlocked = blocked.count(key) > 0
+            unarchive(key)
             val pid = providerInsert(address, body, now, Telephony.Sms.MESSAGE_TYPE_INBOX, false, subId)
             val m = MessageEntity(
                 providerId = pid, threadKey = key, address = address, body = body, date = now,
@@ -150,6 +151,7 @@ class Repository(
         lock.withLock {
             val now = System.currentTimeMillis()
             val key = PhoneUtils.key(address)
+            unarchive(key)
             val pid = providerInsert(address, body, now, Telephony.Sms.MESSAGE_TYPE_SENT, true, subId)
             val m = MessageEntity(
                 providerId = pid, threadKey = key, address = address, body = body, date = now,
@@ -187,8 +189,26 @@ class Repository(
         if (ids.isNotEmpty()) messages.trashIds(ids, System.currentTimeMillis())
     }
 
-    suspend fun trashThreads(keys: List<String>) = withContext(Dispatchers.IO) {
-        if (keys.isNotEmpty()) messages.trashThreads(keys, System.currentTimeMillis())
+    /** Returns the trash timestamp so the move can be undone with [restoreThreads]. */
+    suspend fun trashThreads(keys: List<String>): Long = withContext(Dispatchers.IO) {
+        val at = System.currentTimeMillis()
+        if (keys.isNotEmpty()) messages.trashThreads(keys, at)
+        at
+    }
+
+    suspend fun restoreThreads(keys: List<String>, at: Long) = withContext(Dispatchers.IO) {
+        if (keys.isNotEmpty()) messages.restoreThreads(keys, at)
+    }
+
+    suspend fun setArchived(keys: List<String>, archived: Boolean) = withContext(Dispatchers.IO) {
+        for (k in keys) {
+            val p = prefs.get(k) ?: ChatPref(k)
+            if (p.archived != archived) prefs.upsert(p.copy(archived = archived))
+        }
+    }
+
+    private suspend fun unarchive(key: String) {
+        prefs.get(key)?.takeIf { it.archived }?.let { prefs.upsert(it.copy(archived = false)) }
     }
 
     suspend fun restore(ids: List<Long>) = withContext(Dispatchers.IO) {
