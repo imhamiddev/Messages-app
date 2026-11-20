@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package dev.imhamid.messages.ui
 
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -32,7 +36,8 @@ import dev.imhamid.messages.sms.SmsSender
 
 object Routes {
     const val LIST = "list"
-    const val CHAT = "chat/{addr}"
+    const val CHAT = "chat/{addr}?msg={msg}"
+    const val ARCHIVED = "archived"
     const val NEW = "new"
     const val SETTINGS = "settings"
     const val TRASH = "trash"
@@ -41,8 +46,8 @@ object Routes {
     const val SEARCH = "search"
 
     /** Addresses can contain any character, so they travel through the route hex-encoded. */
-    fun chat(address: String): String =
-        "chat/" + address.toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
+    fun chat(address: String, msgId: Long = -1L): String =
+        "chat/" + address.toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) } + "?msg=$msgId"
 
     fun decode(hex: String): String {
         if (hex.length % 2 != 0) return ""
@@ -103,6 +108,7 @@ private fun AppNavHost(vm: MainViewModel, launchAddress: String?, onLaunchConsum
         }
     }
 
+    SharedTransitionLayout {
     NavHost(
         navController = nav,
         startDestination = Routes.LIST,
@@ -112,6 +118,7 @@ private fun AppNavHost(vm: MainViewModel, launchAddress: String?, onLaunchConsum
         popExitTransition = { slideOutHorizontally(spec) { sign * it / 4 } + fadeOut(fade) }
     ) {
         composable(Routes.LIST) {
+            CompositionLocalProvider(LocalShared provides (this@SharedTransitionLayout to this)) {
             ChatListScreen(
                 vm,
                 onOpen = { nav.navigate(Routes.chat(it)) },
@@ -120,12 +127,26 @@ private fun AppNavHost(vm: MainViewModel, launchAddress: String?, onLaunchConsum
                 onTrash = { nav.navigate(Routes.TRASH) },
                 onBlocked = { nav.navigate(Routes.BLOCKED) },
                 onScheduled = { nav.navigate(Routes.SCHEDULED) },
-                onSearch = { nav.navigate(Routes.SEARCH) }
+                onSearch = { nav.navigate(Routes.SEARCH) },
+                onArchived = { nav.navigate(Routes.ARCHIVED) }
             )
+            }
         }
-        composable(Routes.CHAT, arguments = listOf(navArgument("addr") { type = NavType.StringType })) { e ->
+        composable(
+            Routes.CHAT,
+            arguments = listOf(
+                navArgument("addr") { type = NavType.StringType },
+                navArgument("msg") { type = NavType.LongType; defaultValue = -1L }
+            )
+        ) { e ->
             val addr = Routes.decode(e.arguments?.getString("addr").orEmpty())
-            ChatScreen(vm, addr, onBack = { nav.popBackStack() })
+            val msg = e.arguments?.getLong("msg") ?: -1L
+            CompositionLocalProvider(LocalShared provides (this@SharedTransitionLayout to this)) {
+                ChatScreen(vm, addr, focusId = msg, onBack = { nav.popBackStack() })
+            }
+        }
+        composable(Routes.ARCHIVED) {
+            ArchivedScreen(vm, onBack = { nav.popBackStack() }, onOpen = { nav.navigate(Routes.chat(it)) })
         }
         composable(Routes.NEW) {
             NewChatScreen(
@@ -141,7 +162,8 @@ private fun AppNavHost(vm: MainViewModel, launchAddress: String?, onLaunchConsum
         composable(Routes.BLOCKED) { BlockedScreen(vm) { nav.popBackStack() } }
         composable(Routes.SCHEDULED) { ScheduledScreen(vm) { nav.popBackStack() } }
         composable(Routes.SEARCH) {
-            SearchScreen(vm, onBack = { nav.popBackStack() }, onOpen = { nav.navigate(Routes.chat(it)) })
+            SearchScreen(vm, onBack = { nav.popBackStack() }, onOpen = { a, id -> nav.navigate(Routes.chat(a, id)) })
         }
+    }
     }
 }

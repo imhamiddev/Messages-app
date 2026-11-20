@@ -1,5 +1,6 @@
 package dev.imhamid.messages.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -41,7 +42,8 @@ data class ChatPref(
     @PrimaryKey val threadKey: String,
     val pinned: Boolean = false,
     val pinnedAt: Long = 0,
-    val simSubId: Int? = null
+    val simSubId: Int? = null,
+    @ColumnInfo(defaultValue = "0") val archived: Boolean = false
 )
 
 @Entity(tableName = "blocked")

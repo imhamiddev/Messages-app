@@ -1,5 +1,18 @@
 package dev.imhamid.messages.ui
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.border
+import androidx.compose.runtime.mutableIntStateOf
+import kotlin.math.hypot
+import kotlinx.coroutines.delay
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -160,7 +173,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
+fun ChatScreen(vm: MainViewModel, address: String, focusId: Long = -1L, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val key = remember(address) { PhoneUtils.key(address) }
@@ -187,6 +200,13 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
     val hazeState = remember { HazeState() }
     val dens = LocalDensity.current
     var composerH by remember { mutableStateOf(64.dp) }
+    val uiScope = rememberCoroutineScope()
+    val jumpHaptics = LocalHapticFeedback.current
+    val atBottom by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 200 } }
+    var newCount by remember { mutableIntStateOf(0) }
+    var lastTopId by remember { mutableStateOf<Long?>(null) }
+    var flashId by remember { mutableStateOf<Long?>(null) }
+    var focusDone by remember { mutableStateOf(false) }
 
     fun appendContact(name: String, number: String) {
         text = (if (text.isBlank()) "" else text.trimEnd() + "\n") + name + "\n" + number
@@ -214,8 +234,30 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
         onDispose { if (vm.repo.activeKey == key) vm.repo.activeKey = null }
     }
     LaunchedEffect(messages) {
+        val top = messages.firstOrNull()
+        if (top != null && top.id != lastTopId) {
+            val first = lastTopId == null
+            lastTopId = top.id
+            // Don't yank the view down while the user is reading older messages.
+            if (!first) {
+                if (!top.incoming || atBottom) listState.animateScrollToItem(0) else newCount++
+            }
+        }
         if (messages.any { !it.read }) vm.markRead(key)
-        if (messages.isNotEmpty()) listState.animateScrollToItem(0)
+    }
+    LaunchedEffect(atBottom) { if (atBottom) newCount = 0 }
+    LaunchedEffect(messages.isNotEmpty(), focusId) {
+        if (focusId >= 0 && !focusDone && messages.isNotEmpty()) {
+            val idx = messages.indexOfFirst { it.id == focusId }
+            if (idx >= 0) {
+                focusDone = true
+                delay(350)
+                listState.animateScrollToItem(idx)
+                flashId = focusId
+                delay(1700)
+                flashId = null
+            }
+        }
     }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -233,7 +275,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                     },
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(title, isContact = name != null, size = 38.dp, address = address)
+                            Avatar(title, isContact = name != null, size = 38.dp, address = address, sharedKey = key)
                             Spacer(Modifier.width(10.dp))
                             Column {
                                 Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1)
@@ -301,7 +343,7 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                                 )
                             }
                             Bubble(
-                                m = m, fa = fa, sims = sims,
+                                m = m, fa = fa, sims = sims, flash = flashId == m.id,
                                 animateIn = m.date >= openedAt && m.id !in played,
                                 onPlayed = { played.add(m.id) },
                                 groupedOlder = groupedOlder, groupedNewer = groupedNewer,
@@ -315,6 +357,20 @@ fun ChatScreen(vm: MainViewModel, address: String, onBack: () -> Unit) {
                                 onDelete = { deleteTarget = m },
                                 onResend = { vm.resend(m, effectiveSub) }
                             )
+                        }
+                    }
+                }
+                AnimatedVisibility(
+                    visible = !atBottom,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = composerH + 10.dp),
+                    enter = scaleIn(spring(dampingRatio = 0.5f, stiffness = 400f), initialScale = 0.3f) + fadeIn(tween(120)),
+                    exit = scaleOut(tween(140), targetScale = 0.4f) + fadeOut(tween(120))
+                ) {
+                    JumpButton(newCount, fa) {
+                        jumpHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        uiScope.launch {
+                            if (listState.firstVisibleItemIndex > 15) listState.scrollToItem(10)
+                            listState.animateScrollToItem(0)
                         }
                     }
                 }
@@ -523,6 +579,7 @@ private fun Bubble(
     m: MessageEntity,
     fa: Boolean,
     sims: List<SimInfo>,
+    flash: Boolean = false,
     animateIn: Boolean,
     onPlayed: () -> Unit,
     groupedOlder: Boolean,
@@ -548,6 +605,24 @@ private fun Bubble(
     var textCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var boxCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var numberSel by remember { mutableStateOf<TextRange?>(null) }
+    val rscope = rememberCoroutineScope()
+    val rip = remember { Animatable(0f) }
+    var ripCenter by remember { mutableStateOf(Offset.Zero) }
+    val flashA by animateFloatAsState(if (flash) 1f else 0f, tween(500), label = "flash")
+    val shake = remember { Animatable(0f) }
+    var prevType by remember { mutableIntStateOf(m.type) }
+    LaunchedEffect(m.type) {
+        if (m.type == TYPE_FAILED && prevType != TYPE_FAILED) {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            for (v in listOf(-14f, 12f, -9f, 6f, -3f, 0f)) shake.animateTo(v, tween(55))
+        }
+        prevType = m.type
+    }
+    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
+        0.25f, 0.75f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "pulse-a"
+    )
+    val sendA by animateFloatAsState(if (m.type == TYPE_SENDING) 1f else 0f, tween(300), label = "send-a")
+    val failA by animateFloatAsState(if (m.type == TYPE_FAILED) 1f else 0f, tween(300), label = "fail-a")
     val appear = remember { Animatable(if (animateIn) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (animateIn) {
@@ -601,6 +676,11 @@ private fun Bubble(
         }
     }
     val code = remember(m.body, out) { if (out) null else Smart.verificationCode(m.body) }
+    val ringColor = when {
+        failA > 0.01f -> MaterialTheme.colorScheme.error.copy(alpha = 0.85f * failA)
+        sendA > 0.01f -> (if (out) content else MaterialTheme.colorScheme.primary).copy(alpha = pulse * sendA)
+        else -> Color.Transparent
+    }
 
     Row(
         Modifier.fillMaxWidth()
@@ -611,7 +691,7 @@ private fun Bubble(
                 scaleX = sc
                 scaleY = sc
                 translationY = (1f - appear.value) * 56f
-                translationX = (1f - appear.value) * (if (out) 40f else -40f)
+                translationX = (1f - appear.value) * (if (out) 40f else -40f) + shake.value
                 transformOrigin = TransformOrigin(if (out) 1f else 0f, 1f)
             },
         horizontalArrangement = if (out) Arrangement.End else Arrangement.Start
@@ -623,12 +703,24 @@ private fun Bubble(
                 color = container,
                 contentColor = content,
                 modifier = Modifier.widthIn(max = 300.dp).pressScale(src, 0.97f).then(bgMod).clip(shape)
+                    .drawWithContent {
+                        drawContent()
+                        val r = rip.value
+                        if (r > 0.001f && r < 0.999f) {
+                            val diag = hypot(size.width, size.height)
+                            drawCircle(content.copy(alpha = 0.22f * (1f - r)), radius = diag * r * 1.1f, center = ripCenter)
+                        }
+                        if (flashA > 0.01f) drawRect(content.copy(alpha = 0.28f * flashA))
+                    }
+                    .then(if (ringColor.alpha > 0.01f) Modifier.border(1.5.dp, ringColor, shape) else Modifier)
                     .onGloballyPositioned { boxCoords = it }
                     .then(
                         if (selecting) Modifier else Modifier.pointerInput(m.id) {
                             detectTapGestures(
-                                onPress = {
-                                    val press = PressInteraction.Press(it)
+                                onPress = { off ->
+                                    ripCenter = off
+                                    rscope.launch { rip.snapTo(0f); rip.animateTo(1f, tween(520, easing = FastOutSlowInEasing)) }
+                                    val press = PressInteraction.Press(off)
                                     src.emit(press)
                                     val released = tryAwaitRelease()
                                     src.emit(if (released) PressInteraction.Release(press) else PressInteraction.Cancel(press))
@@ -664,20 +756,39 @@ private fun Bubble(
                         style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
                         onTextLayout = { textLayout = it }
                     )
+                    val linkTok = tokens.firstOrNull { it.kind == LinkKind.URL }
+                    if (linkTok != null && !selecting) LinkCard(linkTok.value, content) { openToken(ctx, linkTok) }
                     if (code != null && !selecting) {
+                        var copied by remember { mutableStateOf(false) }
+                        LaunchedEffect(copied) { if (copied) { delay(1600); copied = false } }
                         Row(
                             Modifier.padding(top = 6.dp).clip(CircleShape)
                                 .background(content.copy(alpha = 0.14f))
                                 .clickable {
                                     clipboard.setText(AnnotatedString(code))
-                                    Toast.makeText(ctx, ctx.getString(R.string.code_copied), Toast.LENGTH_SHORT).show()
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    copied = true
                                 }
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.ContentCopy, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.copy_code, code), style = MaterialTheme.typography.labelMedium)
+                            AnimatedContent(
+                                targetState = copied,
+                                transitionSpec = {
+                                    (scaleIn(spring(dampingRatio = 0.5f, stiffness = 500f), initialScale = 0.6f) + fadeIn(tween(120))) togetherWith
+                                        (scaleOut(tween(90), targetScale = 0.6f) + fadeOut(tween(90)))
+                                },
+                                label = "copy-chip"
+                            ) { c ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(if (c) Icons.Default.Check else Icons.Default.ContentCopy, null, Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        if (c) stringResource(R.string.code_copied) else stringResource(R.string.copy_code, code),
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                            }
                         }
                     }
                     if (showMeta) Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
@@ -941,6 +1052,7 @@ private fun SimChip(sims: List<SimInfo>, effectiveSub: Int, chatSimSet: Boolean,
     var open by remember { mutableStateOf(false) }
     val current = sims.firstOrNull { it.subId == effectiveSub }
     val fa = rememberIsFa()
+    val simHaptics = LocalHapticFeedback.current
     val src = remember { MutableInteractionSource() }
     Box {
         Surface(
@@ -964,14 +1076,95 @@ private fun SimChip(sims: List<SimInfo>, effectiveSub: Int, chatSimSet: Boolean,
         AppDropdown(expanded = open, onDismiss = { open = false }, alignEnd = false) {
             menuItem(
                 text = stringResource(R.string.sim_default_option), icon = Icons.Default.SimCard, checked = !chatSimSet,
-                onClick = { open = false; onPick(null) }
+                onClick = { open = false; simHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPick(null) }
             )
             sims.forEach { s ->
                 menuItem(
                     text = stringResource(R.string.sim_label, s.slot) + " · " + s.name, icon = Icons.Default.SimCard,
                     checked = chatSimSet && s.subId == effectiveSub,
-                    onClick = { open = false; onPick(s.subId) }
+                    onClick = { open = false; simHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove); onPick(s.subId) }
                 )
+            }
+        }
+    }
+}
+
+
+/** Offline link card (domain only). We deliberately don't fetch the page: that would tell the sender the SMS was opened. */
+@Composable
+private fun LinkCard(url: String, fg: Color, onClick: () -> Unit) {
+    val full = if (url.contains("://")) url else "https://$url"
+    val parsed = remember(full) { runCatching { Uri.parse(full) }.getOrNull() }
+    val host = parsed?.host?.removePrefix("www.")
+    if (host.isNullOrBlank()) return
+    val secure = parsed?.scheme.equals("https", ignoreCase = true)
+    val path = remember(full) { parsed?.path.orEmpty().trim('/').ifEmpty { null } }
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    AnimatedVisibility(visible = shown, enter = expandVertically(spring(dampingRatio = 0.75f)) + fadeIn(tween(200))) {
+        Row(
+            Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(fg.copy(alpha = 0.12f)).clickable(onClick = onClick).padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
+                    .background(Color.hsv(((host.hashCode() and 0x7fffffff) % 360).toFloat(), 0.55f, 0.72f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(host.first().uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(host, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Text(
+                    path ?: (if (secure) "https" else "http"), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall, color = fg.copy(alpha = 0.7f)
+                )
+            }
+            Icon(
+                if (secure) Icons.Default.OpenInBrowser else Icons.Default.WarningAmber, null, Modifier.size(18.dp),
+                tint = if (secure) fg.copy(alpha = 0.8f) else MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
+private fun JumpButton(count: Int, fa: Boolean, onClick: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    Box {
+        Surface(
+            shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp,
+            modifier = Modifier.size(44.dp).pressScale(src).clip(CircleShape)
+                .clickable(interactionSource = src, indication = null, onClick = onClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.jump_latest))
+            }
+        }
+        AnimatedVisibility(
+            visible = count > 0,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp),
+            enter = scaleIn(spring(dampingRatio = 0.4f, stiffness = 500f)) + fadeIn(),
+            exit = scaleOut() + fadeOut()
+        ) {
+            Box(
+                Modifier.height(20.dp).widthIn(min = 20.dp).clip(CircleShape).background(accentBrush()).padding(horizontal = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedContent(
+                    targetState = count,
+                    transitionSpec = {
+                        (scaleIn(spring(dampingRatio = 0.4f, stiffness = 500f)) + fadeIn()) togetherWith (scaleOut() + fadeOut())
+                    },
+                    label = "jump-count"
+                ) { n ->
+                    Text(
+                        DateFmt.digits(if (n > 99) "99+" else n.toString(), fa),
+                        style = MaterialTheme.typography.labelSmall, color = onAccent()
+                    )
+                }
             }
         }
     }

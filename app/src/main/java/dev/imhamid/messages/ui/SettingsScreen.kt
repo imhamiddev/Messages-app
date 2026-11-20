@@ -149,7 +149,7 @@ fun SettingsScreen(vm: MainViewModel, onBack: () -> Unit) {
                             stringResource(R.string.material_you_hint), Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Switch(checked = dynamic, onCheckedChange = { vm.settings.setDynamic(it) })
+                        HapticSwitch(checked = dynamic, onCheckedChange = { vm.settings.setDynamic(it) })
                     }
                 }
             }

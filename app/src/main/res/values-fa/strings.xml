@@ -146,4 +146,12 @@
     <string name="settings_material_you">رنگ‌های Material You</string>
     <string name="material_you_hint">استفاده از رنگ‌های والپیپر گوشی</string>
     <string name="link_open_failed">باز کردن لینک ممکن نشد</string>
+    <string name="undo">واگرد</string>
+    <string name="swipe_archived">گفتگو بایگانی شد</string>
+    <string name="swipe_trashed">به سطل زباله منتقل شد</string>
+    <string name="menu_archived">بایگانی‌شده‌ها</string>
+    <string name="archived_title">بایگانی</string>
+    <string name="archived_empty">گفتگوی بایگانی‌شده‌ای نیست</string>
+    <string name="action_archive">بایگانی</string>
+    <string name="jump_latest">رفتن به آخرین پیام</string>
 </resources>
